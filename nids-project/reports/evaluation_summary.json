@@ -1,0 +1,89 @@
+{
+  "classification_report": {
+    "BENIGN": {
+      "precision": 0.9947747734903515,
+      "recall": 0.9991217435300183,
+      "f1-score": 0.9969435200123831,
+      "support": 419012.0
+    },
+    "Botnet": {
+      "precision": 0.9808917197452229,
+      "recall": 0.39487179487179486,
+      "f1-score": 0.5630712979890311,
+      "support": 390.0
+    },
+    "BruteForce": {
+      "precision": 1.0,
+      "recall": 0.9688524590163935,
+      "f1-score": 0.984179850124896,
+      "support": 1830.0
+    },
+    "DDoS": {
+      "precision": 0.9996091307066917,
+      "recall": 0.9988673202359099,
+      "f1-score": 0.9992380877957294,
+      "support": 25603.0
+    },
+    "DoS": {
+      "precision": 0.9962091887129929,
+      "recall": 0.962994503367655,
+      "f1-score": 0.9793202991733369,
+      "support": 38751.0
+    },
+    "Infiltration": {
+      "precision": 1.0,
+      "recall": 0.8571428571428571,
+      "f1-score": 0.9230769230769231,
+      "support": 7.0
+    },
+    "PortScan": {
+      "precision": 0.9875477880939377,
+      "recall": 0.9968575996471691,
+      "f1-score": 0.9921808554418503,
+      "support": 18139.0
+    },
+    "Web Attack \ufffd Brute Force": {
+      "precision": 1.0,
+      "recall": 0.09183673469387756,
+      "f1-score": 0.16822429906542055,
+      "support": 294.0
+    },
+    "Web Attack \ufffd Sql Injection": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 4.0
+    },
+    "Web Attack \ufffd XSS": {
+      "precision": 1.0,
+      "recall": 0.007692307692307693,
+      "f1-score": 0.015267175572519083,
+      "support": 130.0
+    },
+    "accuracy": 0.9948786099650905,
+    "macro avg": {
+      "precision": 0.8959032600749197,
+      "recall": 0.6278237320197982,
+      "f1-score": 0.662150230825209,
+      "support": 504160.0
+    },
+    "weighted avg": {
+      "precision": 0.9948753160385123,
+      "recall": 0.9948786099650905,
+      "f1-score": 0.9944068382389397,
+      "support": 504160.0
+    }
+  },
+  "fpr_per_class": {
+    "BENIGN": 0.025825621271198383,
+    "Botnet": 5.955098556881116e-06,
+    "BruteForce": 0.0,
+    "DDoS": 2.089615239146016e-05,
+    "DoS": 0.00030510798029260283,
+    "Infiltration": 0.0,
+    "PortScan": 0.00046911553204491164,
+    "Web Attack \ufffd Brute Force": 0.0,
+    "Web Attack \ufffd Sql Injection": 0.0,
+    "Web Attack \ufffd XSS": 0.0
+  }
+}

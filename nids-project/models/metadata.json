@@ -1,0 +1,55 @@
+{
+  "model_name": "xgboost",
+  "classes": [
+    "BENIGN",
+    "Botnet",
+    "BruteForce",
+    "DDoS",
+    "DoS",
+    "Infiltration",
+    "PortScan",
+    "Web Attack \ufffd Brute Force",
+    "Web Attack \ufffd Sql Injection",
+    "Web Attack \ufffd XSS"
+  ],
+  "features": [
+    "Bwd Packet Length Std",
+    "Bwd Packet Length Mean",
+    "Packet Length Variance",
+    "Subflow Fwd Bytes",
+    "Total Length of Bwd Packets",
+    "Average Packet Size",
+    "Avg Bwd Segment Size",
+    "Max Packet Length",
+    "Total Length of Fwd Packets",
+    "Packet Length Mean",
+    "Bwd Packet Length Max",
+    "Subflow Bwd Bytes",
+    "Packet Length Std",
+    "Bwd Header Length",
+    "Fwd Packet Length Max",
+    "Subflow Fwd Packets",
+    "Destination Port",
+    "Avg Fwd Segment Size",
+    "Fwd Packet Length Mean",
+    "act_data_pkt_fwd"
+  ],
+  "test_f1_macro": 0.662150230825209,
+  "cv_results": [
+    {
+      "model": "xgboost",
+      "cv_f1_macro_mean": 0.675638726737055,
+      "cv_f1_macro_std": 0.013345347917889359
+    },
+    {
+      "model": "random_forest",
+      "cv_f1_macro_mean": 0.6166157135912969,
+      "cv_f1_macro_std": 0.011837091561754035
+    },
+    {
+      "model": "logistic_regression",
+      "cv_f1_macro_mean": 0.3500794547748568,
+      "cv_f1_macro_std": 0.0004110209406976326
+    }
+  ]
+}
