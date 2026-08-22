@@ -25,7 +25,8 @@ import streamlit as st
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-MODEL_DIR = "models"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "models"))
 
 st.set_page_config(page_title="NIDS Demo", page_icon="🛰️", layout="wide")
 
@@ -78,6 +79,7 @@ def main():
             "Run `python -m src.train --data_dir data/raw/` first."
         )
         st.stop()
+        return
 
     classes = metadata["classes"]
     features = metadata["features"]
@@ -176,3 +178,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+    for i in range(3,7):
+        st.write("")  # add some spacing at the bottom  
+        st.write("")
+    

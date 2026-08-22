@@ -1,13 +1,7 @@
 """
-features.py
-------------
+netguard/features.py
+---------------------
 Feature scaling and selection utilities.
-
-Usage:
-    from src.features import split_data, scale_features, select_features
-
-    X_train, X_test, y_train, y_test = split_data(df, label_col="label_encoded")
-    X_train_scaled, X_test_scaled, scaler = scale_features(X_train, X_test)
 """
 
 from typing import List, Optional, Tuple
@@ -29,26 +23,6 @@ def split_data(
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
     """
     Split into train/test sets, stratified by label by default.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Cleaned, encoded dataframe.
-    label_col : str
-        Name of the integer-encoded label column (the target).
-    drop_cols : list of str, optional
-        Non-feature columns to exclude (e.g. raw string 'Label', any ID/timestamp cols).
-        label_col is dropped automatically.
-    test_size : float
-        Fraction of data held out for testing.
-    random_state : int
-        Seed for reproducibility.
-    stratify : bool
-        If True, stratify split by label_col (recommended given class imbalance).
-
-    Returns
-    -------
-    X_train, X_test, y_train, y_test
     """
     drop_cols = drop_cols or []
     drop_cols = list(set(drop_cols + [label_col]))
@@ -72,11 +46,6 @@ def scale_features(
     """
     Fit a StandardScaler on X_train only, apply to both train and test.
     Critical: never fit the scaler on test data (data leakage).
-
-    Returns
-    -------
-    X_train_scaled, X_test_scaled : pd.DataFrame (same columns as input)
-    scaler : fitted StandardScaler (save this for inference time)
     """
     scaler = StandardScaler()
     X_train_scaled = pd.DataFrame(
@@ -97,15 +66,6 @@ def select_features_by_importance(
     """
     Quick feature selection: fit a Random Forest, return the top_n
     most important features by Gini importance.
-
-    This is a fast heuristic — use SHAP later for a more rigorous
-    explanation of the *final* chosen model, but this is good enough
-    to cut a 78-feature dataset down to a manageable, low-noise set
-    early in the pipeline.
-
-    Returns
-    -------
-    List of column names, ordered by importance (descending).
     """
     rf = RandomForestClassifier(
         n_estimators=100, random_state=random_state, n_jobs=-1, max_depth=15
@@ -116,5 +76,3 @@ def select_features_by_importance(
     top_features = importances.sort_values(ascending=False).head(top_n).index.tolist()
 
     return top_features
-
-

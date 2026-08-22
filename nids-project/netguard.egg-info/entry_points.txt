@@ -1,0 +1,2 @@
+[console_scripts]
+netguard = netguard.cli:cli

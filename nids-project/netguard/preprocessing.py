@@ -1,24 +1,19 @@
 """
-preprocessing.py
-----------------
+netguard/preprocessing.py
+--------------------------
 Cleaning and preparation utilities for CICIDS2017-style network flow data.
 
-Designed to handle known quirks of the CICIDS2017 dataset:
+Handles known quirks of the CICIDS2017 dataset:
 - Leading/trailing whitespace in column names
 - Inf/NaN values in flow-byte/packet-rate columns
 - Inconsistent label strings (e.g. "DoS Hulk" vs "DoS Hulk ")
 - Zero-variance columns that add noise without signal
-
-Usage:
-    from src.preprocessing import load_and_clean, encode_labels
-
-    df = load_and_clean("data/raw/")
-    df, label_encoder = encode_labels(df, collapse_to_families=True)
 """
 
 import glob
 import os
 import re
+from typing import Tuple, List
 
 import numpy as np
 import pandas as pd
@@ -74,22 +69,6 @@ def load_and_clean(
       3. Replace inf with NaN, then drop rows with NaN
       4. Drop exact duplicate rows
       5. Optionally drop zero-variance numeric columns
-
-    Parameters
-    ----------
-    raw_dir : str
-        Directory containing the raw CICIDS2017 CSV files.
-    file_pattern : str
-        Glob pattern to match CSV files (default "*.csv").
-    drop_zero_variance : bool
-        If True, drop numeric columns with zero variance (no signal).
-    verbose : bool
-        If True, print progress and row-count diagnostics.
-
-    Returns
-    -------
-    pd.DataFrame
-        Cleaned dataframe with a normalized 'Label' column.
     """
     paths = sorted(glob.glob(os.path.join(raw_dir, file_pattern)))
     if not paths:
@@ -128,12 +107,12 @@ def load_and_clean(
     df = df.dropna()
     n_after_dropna = len(df)
 
-
     # Drop exact duplicate rows
     n_before_dedup = len(df)
     df = df.drop_duplicates()
     n_after_dedup = len(df)
 
+    zero_var_cols: List[str] = []
     if drop_zero_variance:
         variances = df[numeric_cols].var(numeric_only=True)
         zero_var_cols = variances[variances == 0].index.tolist()
@@ -151,34 +130,27 @@ def load_and_clean(
         print(f"\nLabel distribution:\n{df['Label'].value_counts()}")
 
     return df.reset_index(drop=True)
-    
 
 
 def encode_labels(
     df: pd.DataFrame,
     collapse_to_families: bool = True,
     label_col: str = "Label",
-):
+) -> Tuple[pd.DataFrame, List[str]]:
     """
     Encode the label column into integer classes.
 
     Parameters
     ----------
     df : pd.DataFrame
-        Cleaned dataframe with a label column.
     collapse_to_families : bool
-        If True, collapse fine-grained attack types into families
-        using ATTACK_FAMILY_MAP (recommended — improves per-class sample
-        counts for rare attack types).
+        Collapse fine-grained attack types into families using ATTACK_FAMILY_MAP.
     label_col : str
-        Name of the label column.
 
     Returns
     -------
-    df : pd.DataFrame
-        Dataframe with an added 'label_encoded' integer column.
-    classes : list
-        Ordered list of class names corresponding to encoded integers.
+    df : pd.DataFrame with 'label_encoded' column added
+    classes : ordered list of class name strings
     """
     df = df.copy()
 
@@ -192,10 +164,3 @@ def encode_labels(
     df["label_encoded"] = df[label_col].map(class_to_int)
 
     return df, classes
-
-
-if __name__ == "__main__":
-    # Quick smoke test if run directly — expects CSVs in data/raw/
-    df = load_and_clean("data/raw/")
-    df, classes = encode_labels(df)
-    print(f"\nClasses: {classes}")
