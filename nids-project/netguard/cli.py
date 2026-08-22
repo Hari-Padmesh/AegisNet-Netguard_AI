@@ -185,29 +185,23 @@ def monitor(interface, model_dir, idle_timeout, log_file, count):
     """
     # Gracefully check for Scapy availability before doing anything
     try:
-        from scapy.all import sniff, get_if_list, IP, TCP, UDP, conf
+        from scapy.all import IP, TCP, UDP, conf
     except ImportError:
         console.print("[red]Error:[/red] Scapy is not installed. Run: pip install scapy")
         sys.exit(1)
 
+    # Configure to use Layer 3 sockets (no WinPcap needed)
+    conf.use_pcap = False
+
     try:
-        ifaces = get_if_list()
-    except Exception as e:
-        console.print(
-            f"[red]Could not list network interfaces.[/red]\n"
-            f"Ensure the terminal has administrator privileges.\n"
-            f"Details: {e}"
-        )
+        import socket
+    except ImportError:
+        console.print("[red]Error:[/red] socket module not available")
         sys.exit(1)
 
-    if not ifaces:
-        console.print("[red]No network interfaces found.[/red]")
-        sys.exit(1)
-
-    iface = interface or ifaces[0]
     console.print(Panel(
         f"[bold cyan]NetGuard AI — Live Monitor[/bold cyan]\n"
-        f"Interface : [green]{iface}[/green]\n"
+        f"Mode      : [yellow]Layer 3 Raw Sockets[/yellow]\n"
         f"Log file  : [dim]{log_file}[/dim]\n"
         f"Press [bold]Ctrl+C[/bold] to stop.",
         expand=False,
@@ -262,16 +256,29 @@ def monitor(interface, model_dir, idle_timeout, log_file, count):
             if result.is_attack:
                 alert_mgr.trigger(result)
 
-    # Configure Scapy to use Layer 3 raw sockets (no Npcap/WinPcap needed)
-    conf.use_pcap = False
-
+    # Windows Layer 3 raw socket packet capture (no WinPcap needed)
     try:
-        sniff(
-            iface=iface,
-            prn=_process_packet,
-            count=count,
-            store=False,
-        )
+        # Create a raw socket for capturing all incoming IP packets
+        sniffer = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_IP)
+        sniffer.bind((socket.gethostbyname(socket.gethostname()), 0))
+        # Enable receiving all packets
+        sniffer.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+        sniffer.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)
+        
+        pkt_count = 0
+        while True:
+            if count > 0 and pkt_count >= count:
+                break
+            
+            try:
+                raw_data = sniffer.recvfrom(65535)[0]
+                # Parse raw bytes as IP packet using Scapy
+                pkt = IP(raw_data)
+                _process_packet(pkt)
+                pkt_count += 1
+            except Exception as e:
+                # Skip packets that can't be parsed
+                continue
     except KeyboardInterrupt:
         console.print("\n[bold yellow]Capture stopped by user.[/bold yellow]")
     except PermissionError:
@@ -279,6 +286,12 @@ def monitor(interface, model_dir, idle_timeout, log_file, count):
             "[red]Permission denied.[/red] "
             "Run the terminal as Administrator on Windows."
         )
+    finally:
+        try:
+            sniffer.ioctl(socket.SIO_RCVALL, socket.RCVALL_OFF)
+            sniffer.close()
+        except:
+            pass
 
     stats = alert_mgr.stats()
     console.print(
@@ -286,6 +299,142 @@ def monitor(interface, model_dir, idle_timeout, log_file, count):
         f"{pkt_counter['n']} packets, "
         f"{stats['total']} alerts triggered."
     )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  netguard monitor-dashboard  (live capture + interactive dashboard)
+# ──────────────────────────────────────────────────────────────────────────────
+@cli.command("monitor-dashboard")
+@click.option("--model-dir",    default="models", show_default=True)
+@click.option("--idle-timeout", default=30.0,    show_default=True)
+def monitor_dashboard(model_dir, idle_timeout):
+    """
+    Live monitoring with interactive dashboard.
+    
+    Captures packets and displays real-time alerts on an interactive TUI dashboard.
+
+    ⚠️  Requires an elevated (Admin) terminal on Windows.
+    Uses Layer 3 raw sockets (no external drivers needed).
+    """
+    import socket
+    import threading
+    from datetime import datetime
+    from netguard.detection import DetectionEngine
+    from netguard.flow_generator import FlowTracker
+    from netguard.alerts import AlertManager, Alert, Severity
+    from netguard.dashboard import NetGuardDashboard
+    from scapy.all import IP, TCP, UDP, conf
+
+    # Configure to use Layer 3 sockets
+    conf.use_pcap = False
+
+    try:
+        engine = DetectionEngine(model_dir=model_dir).load()
+    except FileNotFoundError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+    # Create the dashboard app
+    dashboard_app = NetGuardDashboard(model_dir=model_dir)
+
+    # Monitoring state
+    monitor_state = {"running": True, "pkt_count": 0}
+    tracker = FlowTracker(idle_timeout=idle_timeout)
+
+    def _monitor_thread():
+        """Background thread that captures packets and pushes alerts to dashboard."""
+        try:
+            sniffer = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_IP)
+            sniffer.bind((socket.gethostbyname(socket.gethostname()), 0))
+            sniffer.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+            sniffer.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)
+
+            while monitor_state["running"]:
+                try:
+                    raw_data = sniffer.recvfrom(65535)[0]
+                    pkt = IP(raw_data)
+
+                    if not pkt.haslayer(IP):
+                        continue
+
+                    ip = pkt[IP]
+                    ip_header_len = ip.ihl * 4 if hasattr(ip, "ihl") else 20
+
+                    if pkt.haslayer(TCP):
+                        tcp = pkt[TCP]
+                        sport, dport = tcp.sport, tcp.dport
+                        header_len = float(
+                            ip_header_len + (tcp.dataofs * 4 if hasattr(tcp, "dataofs") else 20)
+                        )
+                        flags = int(tcp.flags) if tcp.flags else 0
+                        payload_len = float(len(tcp.payload)) if tcp.payload else 0.0
+                    elif pkt.haslayer(UDP):
+                        udp = pkt[UDP]
+                        sport, dport = udp.sport, udp.dport
+                        header_len = float(ip_header_len + 8)
+                        flags = 0
+                        payload_len = float(len(udp.payload)) if udp.payload else 0.0
+                    else:
+                        continue
+
+                    ts = float(pkt.time) if hasattr(pkt, "time") else None
+                    finished = tracker.add_packet(
+                        ip.src, ip.dst, sport, dport, ip.proto, payload_len, header_len, flags, ts
+                    )
+                    idle = tracker.collect_idle_flows()
+
+                    for flow in finished + idle:
+                        fv = flow.to_feature_vector()
+                        result = engine.predict(fv, flow_summary=flow.summary())
+                        
+                        # Convert PredictionResult to Alert for dashboard
+                        if result.is_attack:
+                            if result.confidence >= 0.9:
+                                severity = Severity.CRITICAL
+                            elif result.confidence >= 0.75:
+                                severity = Severity.HIGH
+                            else:
+                                severity = Severity.MEDIUM
+                        else:
+                            severity = Severity.INFO
+                        
+                        alert = Alert(
+                            severity=severity,
+                            timestamp=datetime.utcnow().isoformat() + "Z",
+                            label=result.label,
+                            confidence=result.confidence,
+                            flow_summary=result.flow_summary,
+                        )
+                        dashboard_app.push_alert(alert)
+
+                    monitor_state["pkt_count"] += 1
+
+                except Exception:
+                    continue
+
+        except PermissionError:
+            console.print(
+                "[red]Permission denied.[/red] "
+                "Run the terminal as Administrator on Windows."
+            )
+        finally:
+            try:
+                sniffer.ioctl(socket.SIO_RCVALL, socket.RCVALL_OFF)
+                sniffer.close()
+            except:
+                pass
+            monitor_state["running"] = False
+
+    # Start monitoring in background thread
+    thread = threading.Thread(target=_monitor_thread, daemon=True)
+    thread.start()
+
+    # Run the dashboard (blocks until user quits)
+    try:
+        dashboard_app.run()
+    finally:
+        monitor_state["running"] = False
+        thread.join(timeout=2)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
