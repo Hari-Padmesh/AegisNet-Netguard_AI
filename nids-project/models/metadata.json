@@ -8,11 +8,12 @@
     "DoS",
     "Infiltration",
     "PortScan",
-    "Web Attack \ufffd Brute Force",
-    "Web Attack \ufffd Sql Injection",
-    "Web Attack \ufffd XSS"
+    "Web Attack - Brute Force",
+    "Web Attack - Sql Injection",
+    "Web Attack - XSS"
   ],
   "features": [
+    
     "Bwd Packet Length Std",
     "Bwd Packet Length Mean",
     "Packet Length Variance",
