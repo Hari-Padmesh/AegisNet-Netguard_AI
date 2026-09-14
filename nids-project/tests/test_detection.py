@@ -10,10 +10,10 @@ otherwise gracefully skips tests that require them.
 import os
 import pytest
 
-from netguard.detection import DetectionEngine, PredictionResult
+from netguard.detection import DetectionEngine, PredictionResult, get_default_model_dir
 from netguard.flow_generator import FLOW_FEATURES
 
-MODEL_DIR = "models"
+MODEL_DIR = get_default_model_dir()
 ARTIFACTS_AVAILABLE = (
     os.path.exists(os.path.join(MODEL_DIR, "best_model.pkl")) and
     os.path.exists(os.path.join(MODEL_DIR, "scaler.pkl")) and
@@ -22,7 +22,7 @@ ARTIFACTS_AVAILABLE = (
 
 requires_model = pytest.mark.skipif(
     not ARTIFACTS_AVAILABLE,
-    reason="Model artifacts not found in models/. Run 'netguard train' first."
+    reason="Model artifacts not found. Run 'netguard train' first."
 )
 
 

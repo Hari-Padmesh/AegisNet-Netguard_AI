@@ -437,16 +437,45 @@ def monitor_dashboard(model_dir, idle_timeout):
         thread.join(timeout=2)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-#  netguard dashboard
-# ──────────────────────────────────────────────────────────────────────────────
 @cli.command()
-@click.option("--model-dir", default="models", show_default=True)
+@click.option("--model-dir", default=None, help="Model artifacts directory.")
 def dashboard(model_dir):
     """Launch the interactive Textual TUI dashboard."""
     from netguard.dashboard import run_dashboard
-    run_dashboard(model_dir=model_dir)
+    run_dashboard(model_dir=model_dir if model_dir else "models")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  netguard dashboard-web
+# ──────────────────────────────────────────────────────────────────────────────
+@cli.command("dashboard-web")
+@click.option("--host", default="127.0.0.1", show_default=True, help="Host to bind to.")
+@click.option("--port", default=8888, show_default=True, help="Port to listen on.")
+@click.option("--model-dir", default=None, help="Model artifacts directory.")
+def dashboard_web(host, port, model_dir):
+    """Launch the modern real-time Web Dashboard (accessible via browser)."""
+    import uvicorn
+    from netguard.detection import DetectionEngine
+    from netguard.alerts import AlertManager
+    from netguard.integrations.base import AppTrafficMonitor
+    from netguard.web.app import create_dashboard_app
+
+    console.print(Panel(
+        f"[bold cyan]NetGuard AI — Web Defense Dashboard[/bold cyan]\n"
+        f"Dashboard URL : [bold green]http://{host}:{port}[/bold green]\n"
+        f"Security Mode : [yellow]Zero-Admin Web Guard[/yellow]\n"
+        f"Press [bold]Ctrl+C[/bold] to stop.",
+        expand=False,
+    ))
+
+    engine = DetectionEngine(model_dir=model_dir).load()
+    alert_mgr = AlertManager(console_output=True)
+    monitor = AppTrafficMonitor(engine=engine, alert_manager=alert_mgr)
+    dash_app = create_dashboard_app(monitor)
+
+    uvicorn.run(dash_app, host=host, port=port, log_level="info")
 
 
 if __name__ == "__main__":
     cli()
+

@@ -24,7 +24,7 @@ import os
 import threading
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Any
 
 from rich.console import Console
 from rich.panel import Panel
@@ -123,14 +123,28 @@ class AlertManager:
         log_file: Optional[str] = None,
         min_severity: Severity = Severity.LOW,
         show_benign: bool = False,
+        console_output: bool = True,
+        webhook_url: Optional[str] = None,
+        webhook_notifier: Optional[Any] = None,
+        email_notifier: Optional[Any] = None,
     ):
-        self._console = Console()
+        self._console = Console() if console_output else None
         self._log_file = log_file
         self._min_severity = min_severity
         self._show_benign = show_benign
         self._lock = threading.Lock()
         self._history: List[Alert] = []
         self._callbacks: List[Callable[[Alert], None]] = []
+
+        if webhook_notifier is not None:
+            self._webhook_notifier = webhook_notifier
+        elif webhook_url:
+            from netguard.notifier.webhook import WebhookNotifier
+            self._webhook_notifier = WebhookNotifier(url=webhook_url, min_severity=min_severity)
+        else:
+            self._webhook_notifier = None
+
+        self._email_notifier = email_notifier
 
         # Severity ordering for comparison
         self._severity_order = [
@@ -179,9 +193,20 @@ class AlertManager:
 
         with self._lock:
             self._history.append(alert)
-            self._print_alert(alert)
+            if self._console:
+                self._print_alert(alert)
             if self._log_file:
                 self._write_log(alert)
+            if self._webhook_notifier:
+                try:
+                    self._webhook_notifier.send(alert)
+                except Exception:
+                    pass
+            if self._email_notifier:
+                try:
+                    self._email_notifier.send(alert)
+                except Exception:
+                    pass
             for cb in self._callbacks:
                 try:
                     cb(alert)
@@ -191,6 +216,8 @@ class AlertManager:
         return alert
 
     def _print_alert(self, alert: Alert) -> None:
+        if not self._console:
+            return
         style, icon = _SEVERITY_STYLES[alert.severity]
         msg = (
             f"{icon} [{style}]{alert.severity.value}[/{style}] "
