@@ -16,12 +16,31 @@ Usage:
 import json
 import os
 import pickle
+import warnings
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 import numpy as np
 
-DEFAULT_MODEL_DIR = "models"
+# Suppress noisy sklearn feature-name warnings (scaler was fit with
+# DataFrame columns but inference uses plain numpy arrays — functionally OK).
+warnings.filterwarnings("ignore", message="X does not have valid feature names")
+
+
+def get_default_model_dir() -> str:
+    """
+    Locate model artifacts directory.
+    Prefers package-bundled models first, then falls back to local './models'.
+    """
+    pkg_model_dir = os.path.join(os.path.dirname(__file__), "models")
+    if os.path.exists(os.path.join(pkg_model_dir, "best_model.pkl")):
+        return pkg_model_dir
+    if os.path.exists(os.path.join("models", "best_model.pkl")):
+        return "models"
+    return pkg_model_dir
+
+
+DEFAULT_MODEL_DIR = get_default_model_dir()
 
 
 @dataclass
@@ -65,12 +84,13 @@ class DetectionEngine:
 
     Parameters
     ----------
-    model_dir : str
+    model_dir : str, optional
         Directory containing best_model.pkl, scaler.pkl, and metadata.json.
+        Defaults to the bundled package models directory.
     """
 
-    def __init__(self, model_dir: str = DEFAULT_MODEL_DIR):
-        self._model_dir = model_dir
+    def __init__(self, model_dir: Optional[str] = None):
+        self._model_dir = model_dir if model_dir is not None else get_default_model_dir()
         self._model = None
         self._scaler = None
         self._classes: List[str] = []
@@ -97,14 +117,16 @@ class DetectionEngine:
                     "Run 'netguard train' first to generate model artifacts."
                 )
 
-        with open(model_path, "rb") as f:
-            self._model = pickle.load(f)
-        with open(scaler_path, "rb") as f:
-            self._scaler = pickle.load(f)
-        with open(meta_path) as f:
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
+            with open(model_path, "rb") as f:
+                self._model = pickle.load(f)
+            with open(scaler_path, "rb") as f:
+                self._scaler = pickle.load(f)
+        with open(meta_path, "r", encoding="utf-8") as f:
             meta = json.load(f)
 
-        self._classes = meta["classes"]
+        self._classes = [c.replace("\ufffd", " - ") for c in meta["classes"]]
         self._features = meta["features"]
         self._loaded = True
         return self
