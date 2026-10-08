@@ -107,6 +107,60 @@ Two modes:
 The demo loads the exact same model/scaler/feature-list artifacts that
 `train.py` produced, so there's no train/serve skew.
 
+## 5. Embeddable SDK (FastAPI, Phase 1)
+
+Install with web integration extras:
+
+```bash
+pip install -e ".[web]"
+```
+
+Set authentication (required for NetGuard API routes):
+
+```bash
+export NETGUARD_AUTH_USERNAME=admin
+export NETGUARD_AUTH_PASSWORD=secret
+export NETGUARD_PROJECT_ID=my-app
+```
+
+Optional Gmail instant alerts:
+
+```bash
+export NETGUARD_ALERT_EMAIL=owner@gmail.com
+export NETGUARD_SMTP_HOST=smtp.gmail.com
+export NETGUARD_SMTP_PORT=587
+export NETGUARD_SMTP_USER=you@gmail.com
+export NETGUARD_SMTP_PASSWORD=<google-app-password>
+export NETGUARD_SMTP_FROM=you@gmail.com
+```
+
+Minimal FastAPI integration:
+
+```python
+from fastapi import FastAPI
+from netguard import NetGuard
+from netguard.integrations.fastapi import setup_netguard
+
+app = FastAPI()
+guard = NetGuard(
+    project_id="my-app",
+    auth_username="admin",
+    auth_password="secret",
+    model_dir="models",
+)
+setup_netguard(app, guard)
+```
+
+Run the included demo (from this directory):
+
+```bash
+uvicorn examples.fastapi_demo.main:app --reload --port 8000
+curl -u admin:secret http://localhost:8000/netguard/health
+```
+
+Phase 2 adds the web dashboard (embedded + `netguard serve`), WebSocket alerts,
+Slack/webhook channels, and weekly email digests.
+
 ## Design notes / known limitations (worth stating explicitly in any writeup)
 
 - **NSL-KDD vs CICIDS2017**: this pipeline is built for CICIDS2017-style

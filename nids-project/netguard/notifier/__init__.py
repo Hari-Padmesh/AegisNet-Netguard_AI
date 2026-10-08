@@ -1,10 +1,9 @@
 """
 netguard/notifier
 -----------------
-Notification dispatchers (Webhooks, Email, etc.)
+Pluggable alert delivery channels for NetGuard.
 """
 
-from netguard.notifier.webhook import WebhookNotifier
-from netguard.notifier.email_notifier import EmailNotifier
+from netguard.notifier.base import AlertNotifier
 
-__all__ = ["WebhookNotifier", "EmailNotifier"]
+__all__ = ["AlertNotifier"]

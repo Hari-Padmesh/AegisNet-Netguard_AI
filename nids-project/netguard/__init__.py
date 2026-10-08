@@ -1,27 +1,25 @@
 """
-NetGuard AI — Network Intrusion Detection System
-=================================================
-A machine-learning based NIDS with real-time capture,
-PCAP analysis, threat alerting, and a rich TUI dashboard.
+NetGuard AI — Embeddable Network Intrusion Detection System
+============================================================
+Import NetGuard in any FastAPI project to monitor HTTP traffic and
+alert on ML-detected threats without admin privileges.
 """
 
-__version__ = "0.1.0"
+from netguard.alerts import Alert, Severity
+from netguard.config import DashboardMode, NetGuardConfig
+from netguard.core import NetGuard
+from netguard.detection import DetectionEngine, PredictionResult
+
+__version__ = "0.2.0"
 __author__ = "NetGuard AI"
 
-from netguard.detection import DetectionEngine, PredictionResult
-from netguard.alerts import AlertManager, Alert, Severity
-from netguard.integrations.fastapi import NetGuardMiddleware, NetGuard
-from netguard.notifier.webhook import WebhookNotifier
-from netguard.notifier.email_notifier import EmailNotifier
-
 __all__ = [
-    "NetGuard",
-    "NetGuardMiddleware",
-    "DetectionEngine",
-    "PredictionResult",
-    "AlertManager",
     "Alert",
+    "DashboardMode",
+    "DetectionEngine",
+    "NetGuard",
+    "NetGuardConfig",
+    "PredictionResult",
     "Severity",
-    "WebhookNotifier",
-    "EmailNotifier",
+    "__version__",
 ]
