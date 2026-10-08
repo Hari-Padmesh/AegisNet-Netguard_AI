@@ -24,12 +24,15 @@ import os
 import threading
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable, List, Optional, Any
+from typing import Callable, List, Optional, TYPE_CHECKING
 
 from rich.console import Console
 from rich.panel import Panel
 
 from netguard.detection import PredictionResult
+
+if TYPE_CHECKING:
+    from netguard.notifier.base import AlertNotifier
 
 
 class Severity(str, Enum):
@@ -123,28 +126,17 @@ class AlertManager:
         log_file: Optional[str] = None,
         min_severity: Severity = Severity.LOW,
         show_benign: bool = False,
-        console_output: bool = True,
-        webhook_url: Optional[str] = None,
-        webhook_notifier: Optional[Any] = None,
-        email_notifier: Optional[Any] = None,
+        console_alerts: bool = True,
     ):
-        self._console = Console() if console_output else None
+        self._console = Console()
         self._log_file = log_file
         self._min_severity = min_severity
         self._show_benign = show_benign
+        self._console_alerts = console_alerts
         self._lock = threading.Lock()
         self._history: List[Alert] = []
         self._callbacks: List[Callable[[Alert], None]] = []
-
-        if webhook_notifier is not None:
-            self._webhook_notifier = webhook_notifier
-        elif webhook_url:
-            from netguard.notifier.webhook import WebhookNotifier
-            self._webhook_notifier = WebhookNotifier(url=webhook_url, min_severity=min_severity)
-        else:
-            self._webhook_notifier = None
-
-        self._email_notifier = email_notifier
+        self._notifiers: List["AlertNotifier"] = []
 
         # Severity ordering for comparison
         self._severity_order = [
@@ -161,6 +153,10 @@ class AlertManager:
     def register_callback(self, fn: Callable[[Alert], None]) -> None:
         """Register a function to be called on every alert (e.g., dashboard update)."""
         self._callbacks.append(fn)
+
+    def register_notifier(self, notifier: "AlertNotifier") -> None:
+        """Register a pluggable alert delivery channel (email, webhook, etc.)."""
+        self._notifiers.append(notifier)
 
     def _severity_rank(self, s: Severity) -> int:
         try:
@@ -193,31 +189,25 @@ class AlertManager:
 
         with self._lock:
             self._history.append(alert)
-            if self._console:
+            if self._console_alerts:
                 self._print_alert(alert)
             if self._log_file:
                 self._write_log(alert)
-            if self._webhook_notifier:
-                try:
-                    self._webhook_notifier.send(alert)
-                except Exception:
-                    pass
-            if self._email_notifier:
-                try:
-                    self._email_notifier.send(alert)
-                except Exception:
-                    pass
             for cb in self._callbacks:
                 try:
                     cb(alert)
                 except Exception:
                     pass
 
+        for notifier in self._notifiers:
+            try:
+                notifier.notify(alert)
+            except Exception:
+                pass
+
         return alert
 
     def _print_alert(self, alert: Alert) -> None:
-        if not self._console:
-            return
         style, icon = _SEVERITY_STYLES[alert.severity]
         msg = (
             f"{icon} [{style}]{alert.severity.value}[/{style}] "

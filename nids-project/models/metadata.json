@@ -13,7 +13,6 @@
     "Web Attack - XSS"
   ],
   "features": [
-    
     "Bwd Packet Length Std",
     "Bwd Packet Length Mean",
     "Packet Length Variance",

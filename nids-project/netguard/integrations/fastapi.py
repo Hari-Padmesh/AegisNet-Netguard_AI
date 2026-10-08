@@ -1,206 +1,128 @@
 """
 netguard/integrations/fastapi.py
 --------------------------------
-FastAPI / Starlette ASGI Middleware and Integrator for NetGuard AI.
-
-Usage:
-    from fastapi import FastAPI
-    from netguard.integrations.fastapi import NetGuardMiddleware
-
-    app = FastAPI()
-    app.add_middleware(
-        NetGuardMiddleware,
-        dashboard=True,
-        mount_path="/_netguard",
-        alert_webhook="https://discord.com/api/webhooks/...",
-        block_attacks=True,
-    )
+FastAPI middleware and setup helper for NetGuard SDK.
 """
 
-import time
-from typing import Optional, Dict, Any
+from __future__ import annotations
 
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-from starlette.requests import Request
-from starlette.responses import Response, JSONResponse
-from starlette.types import ASGIApp
+from typing import Callable, Optional
 
-from netguard.detection import DetectionEngine
-from netguard.alerts import AlertManager, Severity
-from netguard.integrations.base import AppTrafficMonitor
-from netguard.web.app import create_dashboard_app
+from netguard.aggregator import HttpFlowAggregator
+from netguard.core import NetGuard
 
 
-class NetGuardMiddleware(BaseHTTPMiddleware):
+def _client_ip_from_request(request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+def _request_body_size(request) -> float:
+    length = request.headers.get("content-length")
+    if length and length.isdigit():
+        return float(length)
+    return 0.0
+
+
+class NetGuardMiddleware:
     """
-    Asynchronous ASGI Middleware for FastAPI / Starlette applications.
-    Inspects inbound and outbound application traffic in real time with zero admin privileges.
+    ASGI middleware that records HTTP traffic and runs ML classification.
+
+    Install with setup_netguard(app, guard) or add directly:
+        app.add_middleware(NetGuardMiddleware, guard=guard)
+    """
+
+    def __init__(self, app, guard: NetGuard):
+        self.app = app
+        self.guard = guard
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        from starlette.requests import Request
+
+        request = Request(scope, receive)
+        client_ip = _client_ip_from_request(request)
+        req_bytes = _request_body_size(request)
+        dest_port = HttpFlowAggregator.dest_port_from_request(
+            request.headers.get("host"),
+            scheme=scope.get("scheme", "http"),
+        )
+        path = scope.get("path", "/")
+        method = scope.get("method", "GET")
+
+        resp_bytes = 0.0
+        status_code = 200
+
+        async def send_wrapper(message):
+            nonlocal resp_bytes, status_code
+            if message["type"] == "http.response.start":
+                status_code = message.get("status", 200)
+            elif message["type"] == "http.response.body":
+                body = message.get("body", b"") or b""
+                resp_bytes += len(body)
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
+
+        # Approximate response size from status when body was empty (e.g. 204)
+        if resp_bytes == 0 and status_code not in (204, 304):
+            resp_bytes = 256.0
+
+        self.guard.process_request(
+            client_ip=client_ip,
+            req_bytes=req_bytes,
+            resp_bytes=resp_bytes,
+            dest_port=dest_port,
+            path=path,
+            method=method,
+        )
+
+
+def setup_netguard(app, guard: NetGuard, mount_dashboard: bool = False) -> NetGuard:
+    """
+    Attach NetGuard to a FastAPI application.
 
     Parameters
     ----------
-    app : ASGIApp
-        The Starlette / FastAPI application.
-    dashboard : bool
-        Whether to mount the real-time web dashboard (default True).
-    mount_path : str
-        URL path where the dashboard is mounted (default "/_netguard").
-    alert_webhook : str, optional
-        Webhook URL (Discord, Slack, or generic HTTP POST) for instant alert notifications.
-    alert_log_file : str, optional
-        Path to JSON-lines alert audit log file.
-    block_attacks : bool
-        Whether to automatically block IPs identified in high-confidence attacks (default False).
-    block_duration_seconds : float
-        Duration to block offending client IPs (default 300s).
-    engine : DetectionEngine, optional
-        Custom DetectionEngine instance (defaults to pre-trained bundled model).
+    app : FastAPI
+        The host application.
+    guard : NetGuard
+        Configured NetGuard instance.
+    mount_dashboard : bool
+        When True and dashboard_mode allows embedded routes, mount /netguard
+        dashboard (Phase 2). Ignored in Phase 1 except for health endpoint.
+
+    Returns
+    -------
+    NetGuard
+        The same guard instance for chaining.
     """
+    app.add_middleware(NetGuardMiddleware, guard=guard)
 
-    def __init__(
-        self,
-        app: ASGIApp,
-        dashboard: bool = True,
-        mount_path: str = "/_netguard",
-        alert_webhook: Optional[str] = None,
-        alert_log_file: Optional[str] = None,
-        block_attacks: bool = False,
-        block_duration_seconds: float = 300.0,
-        engine: Optional[DetectionEngine] = None,
-        monitor: Optional[AppTrafficMonitor] = None,
-    ):
-        super().__init__(app)
-        self.mount_path = mount_path.rstrip("/")
-        self.dashboard_enabled = dashboard
+    @app.on_event("shutdown")
+    async def _netguard_shutdown():
+        guard.shutdown()
 
-        if monitor is not None:
-            self.monitor = monitor
-            self.alert_manager = monitor.alert_manager
-        else:
-            self.alert_manager = AlertManager(
-                log_file=alert_log_file,
-                console_output=False,
-                webhook_url=alert_webhook,
-            )
-            self.monitor = AppTrafficMonitor(
-                engine=engine,
-                alert_manager=self.alert_manager,
-                block_attacks=block_attacks,
-                block_duration_seconds=block_duration_seconds,
-            )
+    from fastapi import Depends
 
-        # Create dashboard app
-        self._dashboard_app = create_dashboard_app(self.monitor) if dashboard else None
+    from netguard.auth import create_fastapi_auth_dependency
 
-    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        path = request.url.path
+    require_auth = create_fastapi_auth_dependency(guard.config)
+    base_path = guard.config.dashboard_path.rstrip("/")
 
-        # 1. If requesting dashboard route, let dashboard handle it without threat scoring
-        if self.dashboard_enabled and (path == self.mount_path or path.startswith(self.mount_path + "/")):
-            return await call_next(request)
+    @app.get(f"{base_path}/health")
+    async def netguard_health(_user: str = Depends(require_auth)):
+        return {"status": "ok", **guard.stats()}
 
-        # 2. Extract client IP
-        client_ip = request.headers.get("x-forwarded-for")
-        if client_ip:
-            client_ip = client_ip.split(",")[0].strip()
-        elif request.client and request.client.host:
-            client_ip = request.client.host
-        else:
-            client_ip = "127.0.0.1"
+    if mount_dashboard:
+        # Phase 2 will mount full dashboard routes here.
+        pass
 
-        client_port = request.client.port if request.client else 0
-        server_port = request.url.port or (443 if request.url.scheme == "https" else 80)
-
-        # 3. Check if IP is actively blocked
-        if self.monitor.is_ip_blocked(client_ip):
-            return JSONResponse(
-                {
-                    "error": "Access Denied",
-                    "detail": "Your IP address has been temporarily blocked by NetGuard AI threat protection."
-                },
-                status_code=403,
-            )
-
-        # 4. Measure request payload length
-        request_bytes = int(request.headers.get("content-length", 0))
-
-        # 5. Process request through downstream application
-        start_time = time.time()
-        try:
-            response = await call_next(request)
-            status_code = response.status_code
-            response_bytes = int(response.headers.get("content-length", 0))
-        except Exception as exc:
-            status_code = 500
-            response_bytes = 0
-            raise exc
-        finally:
-            duration = time.time() - start_time
-
-            # 6. Analyze request asynchronously in traffic monitor
-            self.monitor.analyze_request(
-                client_ip=client_ip,
-                client_port=client_port,
-                server_port=server_port,
-                method=request.method,
-                path=path,
-                query_string=request.url.query,
-                headers=dict(request.headers),
-                request_bytes=request_bytes,
-                response_bytes=response_bytes,
-                status_code=status_code,
-                duration=duration,
-            )
-
-        return response
-
-
-def NetGuard(
-    app: Any,
-    dashboard: bool = True,
-    mount_path: str = "/_netguard",
-    alert_webhook: Optional[str] = None,
-    alert_log_file: Optional[str] = None,
-    block_attacks: bool = False,
-    block_duration_seconds: float = 300.0,
-    engine: Optional[DetectionEngine] = None,
-) -> AppTrafficMonitor:
-    """
-    Convenience helper to attach NetGuard protection and dashboard to a FastAPI app.
-
-    Usage:
-        app = FastAPI()
-        guard = NetGuard(app, dashboard=True, alert_webhook="https://...")
-    """
-    # Create the monitor
-    alert_mgr = AlertManager(
-        log_file=alert_log_file,
-        console_output=False,
-        webhook_url=alert_webhook,
-    )
-    monitor = AppTrafficMonitor(
-        engine=engine,
-        alert_manager=alert_mgr,
-        block_attacks=block_attacks,
-        block_duration_seconds=block_duration_seconds,
-    )
-
-    # Mount dashboard sub-app if enabled
-    clean_mount = mount_path.rstrip("/")
-    if dashboard and hasattr(app, "mount"):
-        dash_app = create_dashboard_app(monitor)
-        app.mount(clean_mount, dash_app)
-
-    # Add middleware
-    app.add_middleware(
-        NetGuardMiddleware,
-        dashboard=dashboard,
-        mount_path=clean_mount,
-        alert_webhook=alert_webhook,
-        alert_log_file=alert_log_file,
-        block_attacks=block_attacks,
-        block_duration_seconds=block_duration_seconds,
-        engine=engine,
-        monitor=monitor,
-    )
-
-    return monitor
+    return guard
