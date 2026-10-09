@@ -69,6 +69,7 @@ class PredictionResult:
     probabilities: Dict[str, float]
     is_attack: bool
     flow_summary: str = ""
+    detection_source: str = "ml"
 
     def __str__(self) -> str:
         status = "⚠️  ATTACK" if self.is_attack else "✅ BENIGN"

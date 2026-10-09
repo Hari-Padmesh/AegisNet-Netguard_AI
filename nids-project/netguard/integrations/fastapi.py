@@ -45,6 +45,15 @@ class NetGuardMiddleware:
             await self.app(scope, receive, send)
             return
 
+        dashboard_path = self.guard.config.dashboard_path.rstrip("/")
+        request_path = scope.get("path", "/")
+        if dashboard_path and (
+            request_path == dashboard_path
+            or request_path.startswith(f"{dashboard_path}/")
+        ):
+            await self.app(scope, receive, send)
+            return
+
         from starlette.requests import Request
 
         request = Request(scope, receive)
@@ -56,6 +65,7 @@ class NetGuardMiddleware:
         )
         path = scope.get("path", "/")
         method = scope.get("method", "GET")
+        query_string = scope.get("query_string", b"").decode("utf-8", errors="replace")
 
         resp_bytes = 0.0
         status_code = 200
@@ -82,10 +92,12 @@ class NetGuardMiddleware:
             dest_port=dest_port,
             path=path,
             method=method,
+            query_string=query_string,
+            status_code=status_code,
         )
 
 
-def setup_netguard(app, guard: NetGuard, mount_dashboard: bool = False) -> NetGuard:
+def setup_netguard(app, guard: NetGuard, mount_dashboard: bool = True) -> NetGuard:
     """
     Attach NetGuard to a FastAPI application.
 
@@ -96,8 +108,7 @@ def setup_netguard(app, guard: NetGuard, mount_dashboard: bool = False) -> NetGu
     guard : NetGuard
         Configured NetGuard instance.
     mount_dashboard : bool
-        When True and dashboard_mode allows embedded routes, mount /netguard
-        dashboard (Phase 2). Ignored in Phase 1 except for health endpoint.
+        When True, mount the authenticated dashboard under the configured path.
 
     Returns
     -------
@@ -110,19 +121,20 @@ def setup_netguard(app, guard: NetGuard, mount_dashboard: bool = False) -> NetGu
     async def _netguard_shutdown():
         guard.shutdown()
 
-    from fastapi import Depends
-
-    from netguard.auth import create_fastapi_auth_dependency
-
-    require_auth = create_fastapi_auth_dependency(guard.config)
     base_path = guard.config.dashboard_path.rstrip("/")
 
-    @app.get(f"{base_path}/health")
-    async def netguard_health(_user: str = Depends(require_auth)):
-        return {"status": "ok", **guard.stats()}
-
     if mount_dashboard:
-        # Phase 2 will mount full dashboard routes here.
-        pass
+        from netguard.web.app import create_dashboard_app
+
+        app.mount(base_path, create_dashboard_app(guard))
+    else:
+        from fastapi import Depends
+        from netguard.auth import create_fastapi_auth_dependency
+
+        require_auth = create_fastapi_auth_dependency(guard.config)
+
+        @app.get(f"{base_path}/health")
+        async def netguard_health(_user: str = Depends(require_auth)):
+            return {"status": "ok", **guard.stats()}
 
     return guard

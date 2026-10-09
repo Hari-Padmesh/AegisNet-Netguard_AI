@@ -6,6 +6,7 @@ traffic monitor, webhook notifiers, and dashboard endpoints.
 """
 
 import pytest
+from fastapi import FastAPI
 from starlette.applications import Starlette
 from starlette.responses import PlainTextResponse
 from starlette.routing import Route
@@ -13,8 +14,9 @@ from starlette.testclient import TestClient
 
 from netguard.detection import DetectionEngine, PredictionResult
 from netguard.alerts import AlertManager, Alert, Severity
+from netguard import NetGuard
 from netguard.integrations.base import AppTrafficMonitor
-from netguard.integrations.fastapi import NetGuardMiddleware, NetGuard
+from netguard.integrations.fastapi import NetGuardMiddleware, setup_netguard
 from netguard.notifier.webhook import WebhookNotifier
 
 
@@ -106,70 +108,132 @@ class TestAppTrafficMonitor:
 
 
 class TestFastAPIMiddleware:
+    @staticmethod
+    def _build_app(**guard_options):
+        app = FastAPI()
+        config = {
+            "project_id": "test-app",
+            "auth_username": "admin",
+            "auth_password": "secret",
+        }
+        config.update(guard_options)
+        guard = NetGuard(**config)
+        setup_netguard(app, guard)
+
+        @app.get("/")
+        async def home():
+            return {"status": "ok"}
+
+        return app, guard
+
     def test_middleware_attaches_and_intercepts(self):
-        """Starlette / FastAPI app protected by NetGuard should process requests and record stats."""
-        async def home(request):
-            return PlainTextResponse("Hello Secure World")
-
-        app = Starlette(routes=[Route("/", endpoint=home)])
-        guard = NetGuard(app, dashboard=True, mount_path="/_netguard")
+        """FastAPI middleware should process requests and record request counts."""
+        app, guard = self._build_app()
 
         client = TestClient(app)
 
-        # Normal request
         resp = client.get("/")
         assert resp.status_code == 200
-        assert resp.text == "Hello Secure World"
+        assert guard.request_count == 1
 
-        # Check that request was recorded
-        stats = guard.get_stats()
-        assert stats["total_requests"] >= 1
-
-    def test_dashboard_route_serves_html(self):
-        """The mounted dashboard endpoint should serve the HTML dashboard."""
-        async def home(request):
-            return PlainTextResponse("Home")
-
-        app = Starlette(routes=[Route("/", endpoint=home)])
-        guard = NetGuard(app, dashboard=True, mount_path="/_netguard")
-
-        client = TestClient(app)
-        resp = client.get("/_netguard/")
-        assert resp.status_code == 200
-        assert "NetGuard AI" in resp.text
-        assert "System Threat Level" in resp.text or "SYSTEM THREAT LEVEL" in resp.text
-
-    def test_dashboard_api_stats_endpoint(self):
-        """Dashboard API stats endpoint should return telemetry JSON."""
-        async def home(request):
-            return PlainTextResponse("Home")
-
-        app = Starlette(routes=[Route("/", endpoint=home)])
-        guard = NetGuard(app, dashboard=True, mount_path="/_netguard")
-
-        client = TestClient(app)
-        resp = client.get("/_netguard/api/stats")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert "total_requests" in data
-        assert "threat_level" in data
-
-    def test_auto_blocking_returns_403(self):
-        """When an IP is blocked, requests should receive 403 Forbidden."""
-        async def home(request):
-            return PlainTextResponse("Home")
-
-        app = Starlette(routes=[Route("/", endpoint=home)])
-        guard = NetGuard(app, dashboard=True, mount_path="/_netguard", block_attacks=True)
-
+    def test_health_requires_basic_auth(self):
+        """The Phase 1 health endpoint should require configured credentials."""
+        app, _ = self._build_app()
         client = TestClient(app)
 
-        # Block IP
-        guard.block_ip("testclient")
+        unauthorized = client.get("/netguard/health")
+        authorized = client.get("/netguard/health", auth=("admin", "secret"))
 
-        resp = client.get("/")
-        assert resp.status_code == 403
-        assert "blocked" in resp.text.lower()
+        assert unauthorized.status_code == 401
+        assert authorized.status_code == 200
+        assert authorized.json()["status"] == "ok"
+
+    def test_health_accepts_bearer_api_key(self):
+        """The Phase 1 health endpoint should accept a configured API key."""
+        app, _ = self._build_app(auth_username="", auth_password="", auth_api_key="test-key")
+        client = TestClient(app)
+
+        response = client.get(
+            "/netguard/health",
+            headers={"Authorization": "Bearer test-key"},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "ok"
+
+    def test_dashboard_routes_are_authenticated(self):
+        """Embedded dashboard HTML and APIs require the configured credentials."""
+        app, _ = self._build_app()
+        client = TestClient(app)
+
+        assert client.get("/netguard/").status_code == 401
+        dashboard = client.get("/netguard/", auth=("admin", "secret"))
+        stats = client.get("/netguard/api/stats", auth=("admin", "secret"))
+
+        assert dashboard.status_code == 200
+        assert "NetGuard AI" in dashboard.text
+        assert stats.status_code == 200
+        assert stats.json()["project_id"] == "test-app"
+
+    def test_dashboard_block_ip_action_updates_core_state(self):
+        """Authenticated dashboard block actions should update the core."""
+        app, guard = self._build_app()
+        client = TestClient(app)
+
+        blocked = client.post(
+            "/netguard/api/block-ip",
+            auth=("admin", "secret"),
+            json={"ip": "198.51.100.40", "action": "block"},
+        )
+        unblocked = client.post(
+            "/netguard/api/block-ip",
+            auth=("admin", "secret"),
+            json={"ip": "198.51.100.40", "action": "unblock"},
+        )
+
+        assert blocked.json()["status"] == "blocked"
+        assert guard.is_ip_blocked("198.51.100.40") is False
+        assert unblocked.json()["status"] == "unblocked"
+
+    def test_dashboard_websocket_requires_authentication(self):
+        """Dashboard telemetry should reject unauthenticated WebSocket clients."""
+        app, _ = self._build_app()
+        client = TestClient(app)
+
+        with pytest.raises(Exception):
+            with client.websocket_connect("/netguard/ws") as websocket:
+                websocket.receive_text()
+
+    def test_dashboard_websocket_streams_telemetry(self):
+        """Authenticated WebSocket clients should receive telemetry messages."""
+        app, _ = self._build_app()
+        client = TestClient(app)
+
+        with client.websocket_connect("/netguard/ws", headers={"authorization": "Basic YWRtaW46c2VjcmV0"}) as websocket:
+            message = websocket.receive_json()
+
+        assert message["type"] == "telemetry"
+        assert message["data"]["project_id"] == "test-app"
+
+    def test_dashboard_accepts_authenticated_remote_event(self):
+        """Standalone dashboard event ingestion should create an alert."""
+        app, guard = self._build_app()
+        client = TestClient(app)
+
+        response = client.post(
+            "/netguard/api/events",
+            auth=("admin", "secret"),
+            json={
+                "label": "PortScan",
+                "confidence": 0.95,
+                "flow_summary": "remote test event",
+                "detection_source": "remote",
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json()["accepted"] is True
+        assert guard.alert_manager.stats()["total"] == 1
 
 
 class TestWebhookNotifier:

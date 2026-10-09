@@ -103,6 +103,10 @@ class WebhookNotifier:
         else:
             self._dispatch(alert)
 
+    def notify(self, alert: Alert) -> None:
+        """Implement the shared AlertNotifier protocol."""
+        self.send(alert)
+
     def _dispatch(self, alert: Alert) -> None:
         try:
             if self.service == "discord":

@@ -19,3 +19,12 @@ def test_validate_auth_accepts_api_key():
 def test_validate_auth_accepts_basic_credentials():
     cfg = NetGuardConfig(auth_username="admin", auth_password="secret")
     cfg.validate_auth()
+
+
+def test_dashboard_mode_string_override_is_normalized():
+    cfg = NetGuardConfig.from_env(
+        dashboard_mode="separate",
+        auth_username="admin",
+        auth_password="secret",
+    )
+    assert cfg.dashboard_mode.value == "separate"

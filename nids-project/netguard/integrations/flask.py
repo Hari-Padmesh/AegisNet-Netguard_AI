@@ -18,6 +18,7 @@ from typing import Optional, Dict, Any
 from netguard.detection import DetectionEngine
 from netguard.alerts import AlertManager
 from netguard.integrations.base import AppTrafficMonitor
+from netguard.notifier.webhook import WebhookNotifier
 
 
 class NetGuardFlask:
@@ -43,9 +44,10 @@ class NetGuardFlask:
 
         self.alert_manager = AlertManager(
             log_file=alert_log_file,
-            console_output=False,
-            webhook_url=alert_webhook,
+            console_alerts=False,
         )
+        if alert_webhook:
+            self.alert_manager.register_notifier(WebhookNotifier(alert_webhook))
 
         self.monitor = AppTrafficMonitor(
             engine=engine,
