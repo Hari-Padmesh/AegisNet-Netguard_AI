@@ -77,6 +77,7 @@ class Alert:
     confidence: float
     flow_summary: str
     probabilities: dict = field(default_factory=dict)
+    detection_source: str = "ml"
 
     def to_dict(self) -> dict:
         return {
@@ -85,6 +86,7 @@ class Alert:
             "label":        self.label,
             "confidence":   round(self.confidence, 4),
             "flow_summary": self.flow_summary,
+            "detection_source": self.detection_source,
         }
 
 
@@ -185,6 +187,7 @@ class AlertManager:
             confidence=result.confidence,
             flow_summary=result.flow_summary,
             probabilities=result.probabilities,
+            detection_source=result.detection_source,
         )
 
         with self._lock:

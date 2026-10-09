@@ -24,12 +24,12 @@ console = Console()
 
 
 @click.group()
-@click.version_option("0.1.0", prog_name="NetGuard AI")
+@click.version_option("0.2.0", prog_name="NetGuard AI")
 def cli():
     """
     \b
     ╔═══════════════════════════════════════╗
-    ║      NetGuard AI — NIDS v0.1.0        ║
+    ║      NetGuard AI — NIDS v0.2.0        ║
     ║  ML-powered Network Intrusion Detector ║
     ╚═══════════════════════════════════════╝
 
@@ -437,6 +437,41 @@ def monitor_dashboard(model_dir, idle_timeout):
         thread.join(timeout=2)
 
 
+@cli.command("serve")
+@click.option("--host", default="127.0.0.1", show_default=True)
+@click.option("--port", default=8787, show_default=True)
+@click.option("--project-id", required=True)
+@click.option("--auth-username", required=True)
+@click.option("--auth-password", required=True)
+@click.option("--api-key", default=None)
+@click.option("--model-dir", default="models", show_default=True)
+def serve(host, port, project_id, auth_username, auth_password, api_key, model_dir):
+    """Run the authenticated standalone web dashboard."""
+    try:
+        import uvicorn
+    except ImportError:
+        raise click.ClickException("Uvicorn is required. Install with: pip install 'netguard[web]'")
+
+    from netguard.config import DashboardMode, NetGuardConfig
+    from netguard.core import NetGuard
+    from netguard.web.app import create_dashboard_app
+
+    guard = NetGuard(
+        config=NetGuardConfig(
+            project_id=project_id,
+            model_dir=model_dir,
+            dashboard_mode=DashboardMode.EMBEDDED,
+            dashboard_port=port,
+            auth_username=auth_username,
+            auth_password=auth_password,
+            auth_api_key=api_key or "",
+            log_file="alerts.log",
+        )
+    )
+    console.print(f"[bold cyan]NetGuard dashboard:[/bold cyan] http://{host}:{port}/")
+    uvicorn.run(create_dashboard_app(guard), host=host, port=port)
+
+
 @cli.command()
 @click.option("--model-dir", default=None, help="Model artifacts directory.")
 def dashboard(model_dir):
@@ -452,12 +487,15 @@ def dashboard(model_dir):
 @click.option("--host", default="127.0.0.1", show_default=True, help="Host to bind to.")
 @click.option("--port", default=8888, show_default=True, help="Port to listen on.")
 @click.option("--model-dir", default=None, help="Model artifacts directory.")
-def dashboard_web(host, port, model_dir):
+@click.option("--project-id", default="dashboard", show_default=True)
+@click.option("--auth-username", envvar="NETGUARD_AUTH_USERNAME", required=True)
+@click.option("--auth-password", envvar="NETGUARD_AUTH_PASSWORD", required=True)
+@click.option("--api-key", envvar="NETGUARD_AUTH_API_KEY", default=None)
+def dashboard_web(host, port, model_dir, project_id, auth_username, auth_password, api_key):
     """Launch the modern real-time Web Dashboard (accessible via browser)."""
     import uvicorn
-    from netguard.detection import DetectionEngine
-    from netguard.alerts import AlertManager
-    from netguard.integrations.base import AppTrafficMonitor
+    from netguard.config import DashboardMode, NetGuardConfig
+    from netguard.core import NetGuard
     from netguard.web.app import create_dashboard_app
 
     console.print(Panel(
@@ -468,10 +506,19 @@ def dashboard_web(host, port, model_dir):
         expand=False,
     ))
 
-    engine = DetectionEngine(model_dir=model_dir).load()
-    alert_mgr = AlertManager(console_output=True)
-    monitor = AppTrafficMonitor(engine=engine, alert_manager=alert_mgr)
-    dash_app = create_dashboard_app(monitor)
+    guard = NetGuard(
+        config=NetGuardConfig(
+            project_id=project_id,
+            model_dir=model_dir or "models",
+            dashboard_mode=DashboardMode.EMBEDDED,
+            dashboard_port=port,
+            auth_username=auth_username,
+            auth_password=auth_password,
+            auth_api_key=api_key or "",
+            log_file="alerts.log",
+        )
+    )
+    dash_app = create_dashboard_app(guard)
 
     uvicorn.run(dash_app, host=host, port=port, log_level="info")
 

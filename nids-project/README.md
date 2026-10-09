@@ -107,7 +107,7 @@ Two modes:
 The demo loads the exact same model/scaler/feature-list artifacts that
 `train.py` produced, so there's no train/serve skew.
 
-## 5. Embeddable SDK (FastAPI, Phase 1)
+## 5. Embeddable SDK (FastAPI)
 
 Install with web integration extras:
 
@@ -151,6 +151,13 @@ guard = NetGuard(
 setup_netguard(app, guard)
 ```
 
+The default setup mounts an authenticated dashboard at `/netguard/` with
+health, statistics, alert, IP-blocking, and WebSocket telemetry endpoints.
+Use Basic Auth or a bearer API key configured through `NETGUARD_AUTH_*`.
+The middleware observes only the host application and does not require admin
+privileges. The existing raw packet monitor remains a separate admin-required
+mode on Windows.
+
 Run the included demo (from this directory):
 
 ```bash
@@ -158,8 +165,10 @@ uvicorn examples.fastapi_demo.main:app --reload --port 8000
 curl -u admin:secret http://localhost:8000/netguard/health
 ```
 
-Phase 2 adds the web dashboard (embedded + `netguard serve`), WebSocket alerts,
-Slack/webhook channels, and weekly email digests.
+The model combines deterministic HTTP rules with approximate ML features
+derived from request/response sizes. The bundled model was trained on
+CICIDS-style network flows, so application-specific rules are the authoritative
+first layer for web attacks.
 
 ## Design notes / known limitations (worth stating explicitly in any writeup)
 

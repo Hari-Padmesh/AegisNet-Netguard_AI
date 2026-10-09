@@ -126,6 +126,8 @@ class NetGuardConfig:
         )
         for key, value in overrides.items():
             if hasattr(cfg, key) and value is not None:
+                if key == "dashboard_mode" and isinstance(value, str):
+                    value = DashboardMode(value.lower())
                 setattr(cfg, key, value)
         return cfg
 

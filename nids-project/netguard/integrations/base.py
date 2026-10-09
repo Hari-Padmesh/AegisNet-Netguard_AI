@@ -126,7 +126,7 @@ class AppTrafficMonitor:
         else:
             self.engine = DetectionEngine().load()
 
-        self.alert_manager = alert_manager or AlertManager(console_output=False)
+        self.alert_manager = alert_manager or AlertManager(console_alerts=False)
         self.block_attacks = block_attacks
         self.block_duration_seconds = block_duration_seconds
 
