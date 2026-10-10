@@ -26,6 +26,10 @@ _PATH_TRAVERSAL_PATTERN = re.compile(
     r"(\.\./|\.\.\\|/etc/passwd|/windows/win\.ini|boot\.ini)",
     re.IGNORECASE,
 )
+_AUTH_PATH_PATTERN = re.compile(
+    r"/(login|signin|sign-in|auth|oauth|token|session|password|authenticate)(?:/|$)",
+    re.IGNORECASE,
+)
 
 _SENSITIVE_PATHS = {
     "/.env",
@@ -53,8 +57,14 @@ class RuleMatch:
 class ApplicationRuleEngine:
     """Track short-lived per-client HTTP signals and return rule matches."""
 
-    def __init__(self, window_seconds: float = 60.0, burst_threshold: int = 25):
+    def __init__(
+        self,
+        window_seconds: float = 60.0,
+        burst_window_seconds: float = 2.0,
+        burst_threshold: int = 25,
+    ):
         self.window_seconds = window_seconds
+        self.burst_window_seconds = burst_window_seconds
         self.burst_threshold = burst_threshold
         self._request_times: Dict[str, Deque[float]] = defaultdict(deque)
         self._failed_auth_times: Dict[str, Deque[float]] = defaultdict(deque)
@@ -73,7 +83,7 @@ class ApplicationRuleEngine:
 
         request_times = self._request_times[client_ip]
         request_times.append(timestamp)
-        self._trim(request_times, timestamp)
+        self._trim(request_times, timestamp, self.burst_window_seconds)
 
         if _SQLI_PATTERN.search(target):
             return RuleMatch("Web Attack - Sql Injection", 0.99, "http.sqli")
@@ -82,14 +92,14 @@ class ApplicationRuleEngine:
         if _PATH_TRAVERSAL_PATTERN.search(target):
             return RuleMatch("Web Attack - Path Traversal", 0.99, "http.path_traversal")
 
-        if status_code in (401, 403):
+        normalized_path = path.rstrip("/") or "/"
+        if status_code in (401, 403) and _AUTH_PATH_PATTERN.search(normalized_path):
             failed_auth = self._failed_auth_times[client_ip]
             failed_auth.append(timestamp)
-            self._trim(failed_auth, timestamp)
+            self._trim(failed_auth, timestamp, self.window_seconds)
             if len(failed_auth) >= 5:
                 return RuleMatch("BruteForce", 0.95, "http.failed_auth_burst")
 
-        normalized_path = path.rstrip("/") or "/"
         if normalized_path in _SENSITIVE_PATHS:
             paths = self._sensitive_paths[client_ip]
             paths.append((normalized_path, timestamp))
@@ -104,6 +114,6 @@ class ApplicationRuleEngine:
 
         return None
 
-    def _trim(self, timestamps: Deque[float], now: float) -> None:
-        while timestamps and now - timestamps[0] > self.window_seconds:
+    def _trim(self, timestamps: Deque[float], now: float, window_seconds: float) -> None:
+        while timestamps and now - timestamps[0] > window_seconds:
             timestamps.popleft()

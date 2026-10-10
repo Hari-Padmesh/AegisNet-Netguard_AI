@@ -119,6 +119,8 @@ Implemented on this branch:
 - Deterministic HTTP rules for SQL injection, XSS, path traversal, failed-auth bursts, sensitive-path scans, and request bursts.
 - Embedded dashboard with REST and WebSocket telemetry.
 - Authenticated remote event ingestion and the standalone `netguard serve` command.
+- Multi-project JSON-backed standalone dashboard storage.
+- Optional Django middleware, unprivileged reverse proxy mode, and weekly digest delivery/scheduling.
 - FastAPI demo and simulated traffic script.
 - Integration and model-loading tests.
 - Runtime, web, and training dependency groups with bundled package-data configuration.
@@ -127,11 +129,8 @@ Implemented on this branch:
 
 Still open from the implementation plan:
 
-- Django middleware integration.
-- Non-admin reverse-proxy mode (`netguard proxy`).
-- Weekly digest scheduling and a dedicated `netguard digest --send` command.
-- More complete mocked HTTP/SMTP delivery tests and production retry/backpressure policies.
-- Top-offender client telemetry and richer dashboard read models.
+- Production retry/backpressure policies for external delivery.
+- Durable database-backed dashboard storage beyond the current JSON project registry.
 - Production hardening for dashboard authentication/authorization, trusted proxy headers, request body capture, response streaming, and WebSocket lifecycle management.
 
 ## Important Design Boundaries
@@ -140,6 +139,7 @@ Still open from the implementation plan:
 - Middleware currently uses request headers and response `Content-Length`; streamed bodies and exact payload sizes are not fully captured.
 - `X-Forwarded-For` is trusted when present. Deployments behind an untrusted proxy should configure or sanitize this header before relying on IP blocking.
 - Dashboard HTML, REST, block-IP, and WebSocket surfaces require Basic Auth or a bearer API key.
+- Standalone dashboard persistence is bounded JSON storage intended for local development, not a production database.
 - Model predictions are combined with explicit signature checks. A recognized SQLi/XSS/path-traversal pattern can override or escalate the model label.
 
 ## Recent Commit History

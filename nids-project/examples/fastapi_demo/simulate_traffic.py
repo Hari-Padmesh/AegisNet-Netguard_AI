@@ -15,9 +15,11 @@ Run:
 
 import random
 import time
+import os
+from concurrent.futures import ThreadPoolExecutor
 import requests
 
-BASE_URL = "http://127.0.0.1:8000"
+BASE_URL = os.getenv("NETGUARD_TARGET_URL", "http://127.0.0.1:8000").rstrip("/")
 
 BENIGN_URLS = [
     "/",
@@ -67,11 +69,14 @@ def send_attack():
 
 def send_dos_burst(count=35):
     print(f"\n  [>> SIMULATING DoS BURST: {count} rapid requests]...")
-    for _ in range(count):
+    def send_one(_):
         try:
             requests.get(BASE_URL + "/api/products", timeout=1.0)
         except Exception:
             pass
+
+    with ThreadPoolExecutor(max_workers=min(count, 20)) as executor:
+        list(executor.map(send_one, range(count)))
     print("  [>> DoS BURST COMPLETE]\n")
 
 
@@ -97,10 +102,10 @@ def main():
             iteration += 1
 
             # Mostly benign requests with periodic attacks
-            if iteration % 7 == 0:
-                send_attack()
-            elif iteration % 25 == 0:
+            if iteration % 25 == 0:
                 send_dos_burst(30)
+            elif iteration % 7 == 0:
+                send_attack()
             else:
                 send_benign()
 

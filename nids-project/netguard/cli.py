@@ -440,36 +440,77 @@ def monitor_dashboard(model_dir, idle_timeout):
 @cli.command("serve")
 @click.option("--host", default="127.0.0.1", show_default=True)
 @click.option("--port", default=8787, show_default=True)
-@click.option("--project-id", required=True)
 @click.option("--auth-username", required=True)
 @click.option("--auth-password", required=True)
 @click.option("--api-key", default=None)
-@click.option("--model-dir", default="models", show_default=True)
-def serve(host, port, project_id, auth_username, auth_password, api_key, model_dir):
+@click.option("--storage", default="netguard-projects.json", show_default=True)
+def serve(host, port, auth_username, auth_password, api_key, storage):
     """Run the authenticated standalone web dashboard."""
     try:
         import uvicorn
     except ImportError:
         raise click.ClickException("Uvicorn is required. Install with: pip install 'netguard[web]'")
 
-    from netguard.config import DashboardMode, NetGuardConfig
+    from netguard.web.server import create_dashboard_server_app
+
+    console.print(f"[bold cyan]NetGuard dashboard:[/bold cyan] http://{host}:{port}/")
+    uvicorn.run(
+        create_dashboard_server_app(auth_username, auth_password, api_key or "", storage),
+        host=host,
+        port=port,
+    )
+
+
+@cli.command("digest")
+@click.option("--send", "send_now", is_flag=True, help="Send the digest immediately.")
+def digest(send_now):
+    """Inspect or send the configured weekly email digest."""
+    if not send_now:
+        console.print("Use --send to deliver the current alert history.")
+        return
     from netguard.core import NetGuard
-    from netguard.web.app import create_dashboard_app
+
+    try:
+        guard = NetGuard()
+    except ValueError as exc:
+        raise click.ClickException(str(exc))
+    if not guard.send_weekly_digest():
+        raise click.ClickException("SMTP is not fully configured for digest delivery.")
+    console.print("Weekly digest sent.")
+
+
+@cli.command("proxy")
+@click.option("--target", required=True, help="Upstream HTTP URL, e.g. http://127.0.0.1:3000")
+@click.option("--host", default="127.0.0.1", show_default=True)
+@click.option("--port", default=8080, show_default=True)
+@click.option("--project-id", required=True)
+@click.option("--auth-username", required=True)
+@click.option("--auth-password", required=True)
+@click.option("--api-key", default=None)
+@click.option("--model-dir", default="models", show_default=True)
+def proxy(target, host, port, project_id, auth_username, auth_password, api_key, model_dir):
+    """Run an unprivileged HTTP reverse proxy with NetGuard protection."""
+    try:
+        import uvicorn
+    except ImportError:
+        raise click.ClickException("Uvicorn is required. Install with: pip install 'netguard[web]'")
+
+    from netguard.config import NetGuardConfig
+    from netguard.core import NetGuard
+    from netguard.proxy import create_proxy_app
 
     guard = NetGuard(
         config=NetGuardConfig(
             project_id=project_id,
             model_dir=model_dir,
-            dashboard_mode=DashboardMode.EMBEDDED,
-            dashboard_port=port,
             auth_username=auth_username,
             auth_password=auth_password,
             auth_api_key=api_key or "",
             log_file="alerts.log",
         )
     )
-    console.print(f"[bold cyan]NetGuard dashboard:[/bold cyan] http://{host}:{port}/")
-    uvicorn.run(create_dashboard_app(guard), host=host, port=port)
+    console.print(f"[bold cyan]NetGuard proxy:[/bold cyan] http://{host}:{port} -> {target}")
+    uvicorn.run(create_proxy_app(target, guard), host=host, port=port)
 
 
 @cli.command()

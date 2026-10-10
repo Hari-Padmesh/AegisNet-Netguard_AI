@@ -170,6 +170,50 @@ derived from request/response sizes. The bundled model was trained on
 CICIDS-style network flows, so application-specific rules are the authoritative
 first layer for web attacks.
 
+Standalone multi-project dashboard:
+
+```bash
+netguard serve --port 8787 --auth-username admin --auth-password secret
+```
+
+The server stores bounded project alert history in `netguard-projects.json`.
+Applications configured with `dashboard_mode="separate"` or `"both"` send
+authenticated alert events to `NETGUARD_DASHBOARD_URL`. Use `/api/projects`,
+`/api/stats?project_id=...`, and `/api/alerts?project_id=...` to inspect
+isolated projects.
+
+Optional Django integration:
+
+```python
+MIDDLEWARE = [
+    "netguard.integrations.django.NetGuardDjangoMiddleware",
+    # ...
+]
+```
+
+The middleware reads the same `NETGUARD_*` configuration as the FastAPI
+integration. Install Django support with `pip install "netguard[web]"`.
+
+Unprivileged reverse proxy mode:
+
+```bash
+netguard proxy --target http://127.0.0.1:3000 --port 8080 \
+  --project-id my-app --auth-username admin --auth-password secret
+```
+
+This proxies HTTP traffic through NetGuard without raw packet capture or
+administrator privileges.
+
+Weekly email digest:
+
+```bash
+netguard digest --send
+```
+
+For scheduled delivery in an embedded application, call
+`guard.start_digest_scheduler()` after configuring SMTP. Stop it during
+application shutdown with `guard.stop_digest_scheduler()`.
+
 ## Design notes / known limitations (worth stating explicitly in any writeup)
 
 - **NSL-KDD vs CICIDS2017**: this pipeline is built for CICIDS2017-style

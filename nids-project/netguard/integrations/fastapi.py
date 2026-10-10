@@ -6,10 +6,12 @@ FastAPI middleware and setup helper for NetGuard SDK.
 
 from __future__ import annotations
 
+import time
 from typing import Callable, Optional
 
 from netguard.aggregator import HttpFlowAggregator
 from netguard.core import NetGuard
+from starlette.responses import JSONResponse
 
 
 def _client_ip_from_request(request) -> str:
@@ -57,15 +59,41 @@ class NetGuardMiddleware:
         from starlette.requests import Request
 
         request = Request(scope, receive)
+        request_started_at = time.monotonic()
         client_ip = _client_ip_from_request(request)
+        req_bytes = _request_body_size(request)
+        path = scope.get("path", "/")
+        method = scope.get("method", "GET")
+        query_string = scope.get("query_string", b"").decode("utf-8", errors="replace")
+        if self.guard.is_ip_blocked(client_ip):
+            self.guard.process_request(
+                client_ip=client_ip,
+                req_bytes=req_bytes,
+                resp_bytes=0,
+                dest_port=HttpFlowAggregator.dest_port_from_request(
+                    request.headers.get("host"),
+                    scheme=scope.get("scheme", "http"),
+                ),
+                path=path,
+                method=method,
+                query_string=query_string,
+                status_code=403,
+                timestamp=request_started_at,
+            )
+            response = JSONResponse(
+                {
+                    "error": "Access Denied",
+                    "detail": "This client IP is temporarily blocked by NetGuard.",
+                },
+                status_code=403,
+            )
+            await response(scope, receive, send)
+            return
         req_bytes = _request_body_size(request)
         dest_port = HttpFlowAggregator.dest_port_from_request(
             request.headers.get("host"),
             scheme=scope.get("scheme", "http"),
         )
-        path = scope.get("path", "/")
-        method = scope.get("method", "GET")
-        query_string = scope.get("query_string", b"").decode("utf-8", errors="replace")
 
         resp_bytes = 0.0
         status_code = 200
@@ -94,7 +122,28 @@ class NetGuardMiddleware:
             method=method,
             query_string=query_string,
             status_code=status_code,
+            timestamp=request_started_at,
         )
+
+
+class NetGuardLifespanMiddleware:
+    """Flush NetGuard flows at ASGI shutdown without deprecated FastAPI hooks."""
+
+    def __init__(self, app, guard: NetGuard):
+        self.app = app
+        self.guard = guard
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "lifespan":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_wrapper(message):
+            if message.get("type") == "lifespan.shutdown.complete":
+                self.guard.shutdown()
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
 
 
 def setup_netguard(app, guard: NetGuard, mount_dashboard: bool = True) -> NetGuard:
@@ -116,10 +165,7 @@ def setup_netguard(app, guard: NetGuard, mount_dashboard: bool = True) -> NetGua
         The same guard instance for chaining.
     """
     app.add_middleware(NetGuardMiddleware, guard=guard)
-
-    @app.on_event("shutdown")
-    async def _netguard_shutdown():
-        guard.shutdown()
+    app.add_middleware(NetGuardLifespanMiddleware, guard=guard)
 
     base_path = guard.config.dashboard_path.rstrip("/")
 

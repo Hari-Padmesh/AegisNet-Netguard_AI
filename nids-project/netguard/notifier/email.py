@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import smtplib
+from collections.abc import Iterable
 from email.message import EmailMessage
 from typing import TYPE_CHECKING, Optional
 
@@ -42,6 +43,28 @@ class EmailNotifier(AlertNotifier):
             f"Details    : {alert.flow_summary}\n"
         )
         self._send(subject, body)
+
+    def send_digest(self, alerts: Iterable["Alert"]) -> bool:
+        """Send a summary email and return whether SMTP delivery was attempted."""
+        if not self._config.smtp_configured:
+            logger.debug("Email digest skipped: SMTP not fully configured.")
+            return False
+
+        alert_list = list(alerts)
+        counts = {}
+        for alert in alert_list:
+            counts[alert.label] = counts.get(alert.label, 0) + 1
+        breakdown = "\n".join(f"- {label}: {count}" for label, count in sorted(counts.items()))
+        body = (
+            f"NetGuard weekly digest for project '{self._config.project_id}'.\n\n"
+            f"Total alerts: {len(alert_list)}\n"
+            f"Attack breakdown:\n{breakdown or '- No alerts'}\n"
+        )
+        self._send(
+            f"[NetGuard:{self._config.project_id}] Weekly security digest",
+            body,
+        )
+        return True
 
     def _send(self, subject: str, body: str, to_addr: Optional[str] = None) -> None:
         cfg = self._config

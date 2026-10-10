@@ -51,6 +51,57 @@ def test_request_burst_rule_alerts_after_threshold():
     assert guard.stats()["attacks"] >= 1
 
 
+def test_steady_requests_do_not_trigger_burst_rule():
+    guard = build_guard()
+
+    results = []
+    for timestamp in [index * 0.2 for index in range(25)]:
+        guard._rules.evaluate(
+            client_ip="198.51.100.14",
+            path="/api/items",
+            now=timestamp,
+        )
+        results.append(guard._rules.evaluate(
+            client_ip="198.51.100.15",
+            path="/api/items",
+            now=timestamp,
+        ))
+
+    assert all(result is None for result in results)
+
+
+def test_forbidden_product_requests_do_not_look_like_brute_force():
+    guard = build_guard()
+
+    results = []
+    for _ in range(10):
+        results.append(
+            guard.process_request(
+                client_ip="198.51.100.16",
+                req_bytes=32,
+                resp_bytes=0,
+                path="/api/products",
+                status_code=403,
+            )
+        )
+
+    assert all(not any(result.label == "BruteForce" for result in batch) for batch in results)
+
+
+def test_stats_include_benign_request_events():
+    guard = build_guard()
+    guard.process_request(
+        client_ip="198.51.100.17",
+        req_bytes=32,
+        resp_bytes=128,
+        path="/api/products",
+    )
+
+    events = guard.stats()["recent_events"]
+    assert events[-1]["label"] == "BENIGN"
+    assert events[-1]["path"] == "/api/products"
+
+
 def test_shutdown_flushes_active_flow_and_updates_telemetry():
     guard = build_guard()
 
