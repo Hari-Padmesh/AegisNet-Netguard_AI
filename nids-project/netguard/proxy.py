@@ -26,7 +26,7 @@ def create_proxy_app(target: str, guard: NetGuard) -> Starlette:
     try:
         import httpx
     except ImportError as exc:
-        raise ImportError("Proxy mode requires: pip install 'netguard[web]'") from exc
+        raise ImportError("Proxy mode requires: pip install 'netguard-threat-monitor[web]'") from exc
 
     async def proxy(request: Request) -> Response:
         target_url = f"{target.rstrip('/')}{request.url.path}"

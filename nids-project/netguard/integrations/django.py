@@ -30,7 +30,7 @@ class NetGuardDjangoMiddleware:
         try:
             from django.http import HttpResponseForbidden
         except ImportError as exc:
-            raise ImportError("Django integration requires: pip install 'netguard[web]'") from exc
+            raise ImportError("Django integration requires: pip install 'netguard-threat-monitor[web]'") from exc
 
         client_ip = _client_ip(request)
         if self.guard.is_ip_blocked(client_ip):

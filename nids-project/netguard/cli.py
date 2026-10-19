@@ -449,7 +449,7 @@ def serve(host, port, auth_username, auth_password, api_key, storage):
     try:
         import uvicorn
     except ImportError:
-        raise click.ClickException("Uvicorn is required. Install with: pip install 'netguard[web]'")
+        raise click.ClickException("Uvicorn is required. Install with: pip install 'netguard-threat-monitor[web]'")
 
     from netguard.web.server import create_dashboard_server_app
 
@@ -493,7 +493,7 @@ def proxy(target, host, port, project_id, auth_username, auth_password, api_key,
     try:
         import uvicorn
     except ImportError:
-        raise click.ClickException("Uvicorn is required. Install with: pip install 'netguard[web]'")
+        raise click.ClickException("Uvicorn is required. Install with: pip install 'netguard-threat-monitor[web]'")
 
     from netguard.config import NetGuardConfig
     from netguard.core import NetGuard

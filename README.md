@@ -4,6 +4,14 @@ NetGuard is an embeddable HTTP threat monitoring SDK for Python applications.
 It records request metadata, applies application-layer detection rules and a
 bundled ML model, and provides an authenticated live dashboard.
 
+## Documentation
+
+Browse the [NetGuard documentation site](docs/index.html) for installation,
+framework integrations, dashboard setup, configuration, email alerts, CLI
+commands, and deployment guidance. Preview it locally with:
+
+    python -m http.server 8001 --directory docs
+
 ## Install
 
 From a source checkout, run this command from the repository root:
@@ -15,7 +23,7 @@ python -m pip install ".[web]"
 After a release is published to PyPI, install the web integration with:
 
 ```powershell
-python -m pip install "netguard[web]"
+python -m pip install "netguard-threat-monitor[web]"
 ```
 
 ## FastAPI integration
@@ -54,9 +62,9 @@ manage it from their own lifecycle or use one external scheduler.
 
 ## Optional integrations
 
-- `netguard[web]`: FastAPI, Django, and ASGI server dependencies.
-- `netguard[flask]`: dependency for the separate legacy Flask extension.
-- `netguard[train]`: model training and offline-analysis dependencies.
+- `netguard-threat-monitor[web]`: FastAPI, Django, and ASGI server dependencies.
+- `netguard-threat-monitor[flask]`: dependency for the separate legacy Flask extension.
+- `netguard-threat-monitor[train]`: model training and offline-analysis dependencies.
 
 NetGuard is distributed under the MIT License; see [LICENSE](LICENSE).
 

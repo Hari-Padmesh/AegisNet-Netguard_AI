@@ -118,7 +118,7 @@ python -m pip install ".[web]"
 Run this install command from the repository root (the directory containing
 the top-level `pyproject.toml`). For development, use
 `python -m pip install -e ".[web]"` from that same directory. Once published,
-users will install the release with `python -m pip install "netguard[web]"`.
+users will install the release with `python -m pip install "netguard-threat-monitor[web]"`.
 
 Set authentication (required for NetGuard API routes):
 
@@ -225,9 +225,9 @@ MIDDLEWARE = [
 ```
 
 The middleware reads the same `NETGUARD_*` configuration as the FastAPI
-integration. Install Django support with `pip install "netguard[web]"`.
+integration. Install Django support with `pip install "netguard-threat-monitor[web]"`.
 The Flask extension is a separate, older API; install its dependency with
-`pip install "netguard[flask]"` and import `NetGuardFlask` from
+`pip install "netguard-threat-monitor[flask]"` and import `NetGuardFlask` from
 `netguard.integrations.flask`.
 
 Unprivileged reverse proxy mode:

@@ -81,7 +81,7 @@ def create_fastapi_auth_dependency(config: NetGuardConfig):
         from fastapi.security import HTTPAuthorizationCredentials, HTTPBasic, HTTPBasicCredentials, HTTPBearer
     except ImportError as exc:
         raise ImportError(
-            "FastAPI is required for dashboard auth. Install with: pip install 'netguard[web]'"
+            "FastAPI is required for dashboard auth. Install with: pip install 'netguard-threat-monitor[web]'"
         ) from exc
 
     basic = HTTPBasic(auto_error=False)
