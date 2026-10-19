@@ -2,6 +2,9 @@
 .env.local
 .venv
 .venv/
+.venv-pypi-safe
+.venv-pypi-check
+.venv-pypi-live-check
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -9,6 +12,7 @@ alerts.log
 .claude
 .claude/
 
-
+dist/
+dist-netguard-threat-monitor/
 #dataset
 data/

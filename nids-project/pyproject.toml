@@ -29,6 +29,7 @@ dependencies = [
 [project.optional-dependencies]
 web = [
     "fastapi>=0.100.0",
+    "django>=4.2.0",
     "uvicorn[standard]>=0.23.0",
     "httpx>=0.24.0",
     "python-multipart>=0.0.6",
@@ -58,3 +59,12 @@ include = ["netguard*"]
 
 [tool.setuptools.package-data]
 netguard = ["models/*", "web/static/*"]
+
+[tool.pyright]
+extraPaths = ["."]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore::starlette.exceptions.StarletteDeprecationWarning",
+]
+

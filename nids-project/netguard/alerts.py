@@ -212,14 +212,31 @@ class AlertManager:
 
     def _print_alert(self, alert: Alert) -> None:
         style, icon = _SEVERITY_STYLES[alert.severity]
-        msg = (
-            f"{icon} [{style}]{alert.severity.value}[/{style}] "
-            f"[bold]{alert.label}[/bold] "
-            f"({alert.confidence:.1%} confidence)\n"
-            f"[dim]{alert.flow_summary}[/dim]\n"
-            f"[dim]{alert.timestamp}[/dim]"
-        )
-        self._console.print(Panel(msg, border_style=style.split()[0] if ' ' in style else style))
+        try:
+            msg = (
+                f"{icon} [{style}]{alert.severity.value}[/{style}] "
+                f"[bold]{alert.label}[/bold] "
+                f"({alert.confidence:.1%} confidence)\n"
+                f"[dim]{alert.flow_summary}[/dim]\n"
+                f"[dim]{alert.timestamp}[/dim]"
+            )
+            self._console.print(Panel(msg, border_style=style.split()[0] if ' ' in style else style))
+        except UnicodeEncodeError:
+            # Fallback for Windows consoles using non-UTF8 code pages (e.g. cp1252)
+            try:
+                msg = (
+                    f"[{style}][{alert.severity.value}][/{style}] "
+                    f"[bold]{alert.label}[/bold] "
+                    f"({alert.confidence:.1%} confidence)\n"
+                    f"[dim]{alert.flow_summary}[/dim]\n"
+                    f"[dim]{alert.timestamp}[/dim]"
+                )
+                self._console.print(Panel(msg, border_style=style.split()[0] if ' ' in style else style))
+            except Exception:
+                pass
+        except Exception:
+            pass
+
 
     def _write_log(self, alert: Alert) -> None:
         with open(self._log_file, "a", encoding="utf-8") as f:

@@ -15,9 +15,30 @@ Run:
 
 import random
 import time
+import os
+from concurrent.futures import ThreadPoolExecutor
 import requests
 
-BASE_URL = "http://127.0.0.1:8000"
+BASE_URL = os.getenv("NETGUARD_TARGET_URL", "http://127.0.0.1:8000").rstrip("/")
+
+
+def _try_unblock_self(base_url: str) -> None:
+    """
+    Ask NetGuard to unblock 127.0.0.1 before the run starts.
+    Clears any leftover block from a previous DoS simulation so
+    subsequent runs do not start with 403 on every request.
+    """
+    try:
+        resp = requests.post(
+            f"{base_url}/netguard/api/block-ip",
+            json={"ip": "127.0.0.1", "action": "unblock"},
+            auth=("admin", "secret"),
+            timeout=2.0,
+        )
+        if resp.status_code == 200:
+            print("  [SETUP] Cleared any previous IP block for 127.0.0.1.\n")
+    except Exception:
+        pass  # Dashboard may not be mounted — not a fatal error
 
 BENIGN_URLS = [
     "/",
@@ -50,7 +71,11 @@ def send_benign():
     url = BASE_URL + random.choice(BENIGN_URLS)
     try:
         res = requests.get(url, timeout=2.0)
-        print(f"  [BENIGN] GET {url} -> {res.status_code}")
+        if res.status_code == 403:
+            tag = "BENIGN (IP BLOCKED)"
+        else:
+            tag = "BENIGN"
+        print(f"  [{tag}] GET {url} -> {res.status_code}")
     except Exception as e:
         print(f"  [BENIGN ERROR] {e}")
 
@@ -67,11 +92,14 @@ def send_attack():
 
 def send_dos_burst(count=35):
     print(f"\n  [>> SIMULATING DoS BURST: {count} rapid requests]...")
-    for _ in range(count):
+    def send_one(_):
         try:
             requests.get(BASE_URL + "/api/products", timeout=1.0)
         except Exception:
             pass
+
+    with ThreadPoolExecutor(max_workers=min(count, 20)) as executor:
+        list(executor.map(send_one, range(count)))
     print("  [>> DoS BURST COMPLETE]\n")
 
 
@@ -83,13 +111,23 @@ def main():
     print("=" * 65)
 
     try:
-        requests.get(BASE_URL, timeout=2.0)
+        res = requests.get(BASE_URL, timeout=2.0)
     except Exception:
         print(f"\n[ERROR] Could not connect to {BASE_URL}.")
-        print("Please start the demo application first:\n  uvicorn main:app --port 8000\n")
+        print("\nStart the demo app in a separate terminal:")
+        print(f"  cd D:\\nids-project\\nids-project")
+        print(f"  ..\\.venv\\Scripts\\python.exe -m uvicorn examples.fastapi_demo.main:app --host 127.0.0.1 --port 8000")
+        print(f"\nOr change the target:\n  $env:NETGUARD_TARGET_URL = \"http://127.0.0.1:8000\"")
         return
 
-    print("\nSending simulated traffic (Press Ctrl+C to stop)...\n")
+    if res.status_code == 404:
+        print(f"\n[WARNING] {BASE_URL}/ returned 404 — this may not be the NetGuard demo app.")
+        print("  Double-check that uvicorn is running on the correct port.\n")
+
+    # Clear any leftover IP block from a previous DoS run
+    _try_unblock_self(BASE_URL)
+
+    print("Sending simulated traffic (Press Ctrl+C to stop)...\n")
 
     iteration = 0
     try:
@@ -97,10 +135,10 @@ def main():
             iteration += 1
 
             # Mostly benign requests with periodic attacks
-            if iteration % 7 == 0:
-                send_attack()
-            elif iteration % 25 == 0:
+            if iteration % 25 == 0:
                 send_dos_burst(30)
+            elif iteration % 7 == 0:
+                send_attack()
             else:
                 send_benign()
 

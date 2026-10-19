@@ -109,6 +109,16 @@
             gap: 16px;
         }
 
+        #projectSelector {
+            display: none;
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 9px 12px;
+            font: inherit;
+        }
+
         .status-badge {
             display: inline-flex;
             align-items: center;
@@ -510,6 +520,7 @@
         </div>
 
         <div class="header-actions">
+            <select id="projectSelector" aria-label="Select dashboard project"></select>
             <div id="connectionStatus" class="status-badge">
                 <span class="pulse-dot"></span>
                 <span id="connLabel">LIVE ENGINE CONNECTED</span>
@@ -731,6 +742,8 @@
         // Live Data Update
         let prevTotalReq = 0;
         let prevTotalAtt = 0;
+        let activeProjectId = new URLSearchParams(window.location.search).get('project_id');
+        let isStandaloneDashboard = false;
 
         function updateUI(stats) {
             document.getElementById('totalRequests').textContent = stats.total_requests.toLocaleString();
@@ -798,9 +811,11 @@
                         ? '<span class="alert-badge badge-critical">BLOCKED</span>'
                         : (c.attacks > 0 ? '<span class="alert-badge badge-high">SUSPICIOUS</span>' : '<span class="alert-badge badge-benign">BENIGN</span>');
 
-                    const btnHtml = c.is_blocked
+                    const btnHtml = isStandaloneDashboard
+                        ? '<span style="color: var(--text-muted);">Remote app</span>'
+                        : (c.is_blocked
                         ? `<button class="btn-action btn-unblock" onclick="toggleIpBlock('${c.ip}', 'unblock')">Unblock</button>`
-                        : `<button class="btn-action btn-block" onclick="toggleIpBlock('${c.ip}', 'block')">Block IP</button>`;
+                        : `<button class="btn-action btn-block" onclick="toggleIpBlock('${c.ip}', 'block')">Block IP</button>`);
 
                     tr.innerHTML = `
                         <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">${c.ip}</td>
@@ -856,7 +871,11 @@
         // Fallback polling and WebSocket connection
         async function fetchStats() {
             try {
-                const res = await fetch('api/stats');
+                await discoverProjects();
+                const projectQuery = activeProjectId
+                    ? `?project_id=${encodeURIComponent(activeProjectId)}`
+                    : '';
+                const res = await fetch(`api/stats${projectQuery}`);
                 if (res.ok) {
                     const data = await res.json();
                     updateUI(data);
@@ -872,12 +891,16 @@
             const wsPath = window.location.pathname.endsWith('/') 
                 ? window.location.pathname + 'ws'
                 : window.location.pathname + '/ws';
-            const wsUrl = `${protocol}//${window.location.host}${wsPath}`;
+            const projectQuery = activeProjectId
+                ? `?project_id=${encodeURIComponent(activeProjectId)}`
+                : '';
+            const wsUrl = `${protocol}//${window.location.host}${wsPath}${projectQuery}`;
             
             const ws = new WebSocket(wsUrl);
 
             ws.onopen = () => {
-                document.getElementById('connLabel').textContent = 'LIVE ENGINE CONNECTED';
+                document.getElementById('connLabel').textContent =
+                    isStandaloneDashboard && !activeProjectId ? 'WAITING FOR APP DATA' : 'LIVE ENGINE CONNECTED';
                 document.getElementById('connectionStatus').style.color = 'var(--emerald)';
                 document.getElementById('connectionStatus').style.borderColor = 'rgba(16, 185, 129, 0.3)';
             };
@@ -903,6 +926,52 @@
             ws.onerror = () => {
                 ws.close();
             };
+        }
+
+        // Discover standalone projects; embedded dashboards do not expose this route.
+        async function discoverProjects() {
+            try {
+                const response = await fetch('api/projects');
+                if (response.ok) {
+                    isStandaloneDashboard = true;
+                    const data = await response.json();
+                    const projects = data.projects || [];
+                    const selector = document.getElementById('projectSelector');
+                    if (projects.length === 0) {
+                        selector.style.display = 'none';
+                        document.getElementById('connLabel').textContent = 'WAITING FOR APP DATA';
+                        return;
+                    }
+                    selector.style.display = 'block';
+                    document.getElementById('connLabel').textContent = 'LIVE ENGINE CONNECTED';
+                    const previousProjectId = activeProjectId;
+                    if (!activeProjectId || !projects.includes(activeProjectId)) {
+                        activeProjectId = projects[0];
+                    }
+                    const currentOptions = Array.from(selector.options).map(option => option.value);
+                    if (currentOptions.join('\0') !== projects.join('\0')) {
+                        selector.replaceChildren();
+                        for (const projectId of projects) {
+                            const option = document.createElement('option');
+                            option.value = projectId;
+                            option.textContent = projectId;
+                            selector.appendChild(option);
+                        }
+                    }
+                    selector.value = activeProjectId;
+                    if (!selector.dataset.listenerAttached) {
+                        selector.addEventListener('change', () => {
+                            window.location.search = `?project_id=${encodeURIComponent(selector.value)}`;
+                        });
+                        selector.dataset.listenerAttached = 'true';
+                    }
+                    if (previousProjectId !== activeProjectId && !new URLSearchParams(window.location.search).has('project_id')) {
+                        window.location.search = `?project_id=${encodeURIComponent(activeProjectId)}`;
+                    }
+                }
+            } catch (err) {
+                // Embedded dashboard mode has no project discovery endpoint.
+            }
         }
 
         // Initialize

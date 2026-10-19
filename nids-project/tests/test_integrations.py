@@ -185,15 +185,28 @@ class TestFastAPIMiddleware:
             auth=("admin", "secret"),
             json={"ip": "198.51.100.40", "action": "block"},
         )
+        assert blocked.json()["status"] == "blocked"
+        assert guard.is_ip_blocked("198.51.100.40") is True
+
         unblocked = client.post(
             "/netguard/api/block-ip",
             auth=("admin", "secret"),
             json={"ip": "198.51.100.40", "action": "unblock"},
         )
 
-        assert blocked.json()["status"] == "blocked"
-        assert guard.is_ip_blocked("198.51.100.40") is False
         assert unblocked.json()["status"] == "unblocked"
+        assert guard.is_ip_blocked("198.51.100.40") is False
+
+    def test_blocked_client_receives_forbidden_response(self):
+        """Blocked client IPs should be rejected by middleware."""
+        app, guard = self._build_app()
+        guard.block_ip("testclient")
+
+        response = TestClient(app).get("/", headers={"x-forwarded-for": "testclient"})
+
+        assert response.status_code == 403
+        assert "blocked" in response.text.lower()
+        assert guard.request_count == 1
 
     def test_dashboard_websocket_requires_authentication(self):
         """Dashboard telemetry should reject unauthenticated WebSocket clients."""

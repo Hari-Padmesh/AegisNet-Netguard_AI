@@ -1,5 +1,7 @@
 """Tests for NetGuard configuration."""
 
+import json
+
 import pytest
 
 from netguard.config import NetGuardConfig
@@ -28,3 +30,13 @@ def test_dashboard_mode_string_override_is_normalized():
         auth_password="secret",
     )
     assert cfg.dashboard_mode.value == "separate"
+
+
+def test_rule_cooldowns_can_be_configured_from_environment(monkeypatch):
+    monkeypatch.setenv("NETGUARD_RULE_COOLDOWNS", json.dumps({"http.sqli": 5, "http.xss": 0}))
+
+    cfg = NetGuardConfig.from_env()
+
+    assert cfg.rule_cooldowns["http.sqli"] == 5.0
+    assert cfg.rule_cooldowns["http.xss"] == 0.0
+    assert cfg.rule_cooldowns["http.request_burst"] == 30.0
