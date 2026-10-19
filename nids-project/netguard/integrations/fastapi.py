@@ -127,7 +127,7 @@ class NetGuardMiddleware:
 
 
 class NetGuardLifespanMiddleware:
-    """Flush NetGuard flows at ASGI shutdown without deprecated FastAPI hooks."""
+    """Manage NetGuard background work during the host ASGI lifespan."""
 
     def __init__(self, app, guard: NetGuard):
         self.app = app
@@ -139,7 +139,11 @@ class NetGuardLifespanMiddleware:
             return
 
         async def send_wrapper(message):
-            if message.get("type") == "lifespan.shutdown.complete":
+            message_type = message.get("type")
+            if message_type == "lifespan.startup.complete":
+                self.guard.start_digest_scheduler()
+            elif message_type == "lifespan.shutdown.complete":
+                self.guard.stop_digest_scheduler()
                 self.guard.shutdown()
             await send(message)
 
@@ -148,7 +152,9 @@ class NetGuardLifespanMiddleware:
 
 def setup_netguard(app, guard: NetGuard, mount_dashboard: bool = True) -> NetGuard:
     """
-    Attach NetGuard to a FastAPI application.
+    Attach NetGuard to a FastAPI application. When SMTP is configured and
+    weekly digests are enabled, the digest scheduler starts with the ASGI app
+    and stops when it shuts down.
 
     Parameters
     ----------

@@ -443,7 +443,7 @@ def monitor_dashboard(model_dir, idle_timeout):
 @click.option("--auth-username", required=True)
 @click.option("--auth-password", required=True)
 @click.option("--api-key", default=None)
-@click.option("--storage", default="netguard-projects.json", show_default=True)
+@click.option("--storage", default="netguard-projects.sqlite3", show_default=True)
 def serve(host, port, auth_username, auth_password, api_key, storage):
     """Run the authenticated standalone web dashboard."""
     try:

@@ -6,6 +6,8 @@ alert on ML-detected threats without admin privileges.
 """
 
 from netguard.alerts import Alert, Severity
+
+
 from netguard.config import DashboardMode, NetGuardConfig
 from netguard.core import NetGuard
 from netguard.detection import DetectionEngine, PredictionResult

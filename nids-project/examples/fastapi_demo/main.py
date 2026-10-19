@@ -17,10 +17,16 @@ from __future__ import annotations
 import os
 import sys
 
+# Prevent OpenBLAS memory allocation failure on Windows
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+
 # Allow running without editable install during local dev
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 from fastapi import FastAPI
+
 
 from netguard import NetGuard
 from netguard.integrations.fastapi import setup_netguard
@@ -58,3 +64,18 @@ async def simulate_portscan():
 @app.get("/probe/{port}")
 async def probe(port: int):
     return {"port": port, "open": False}
+
+
+@app.get("/api/products")
+async def get_products():
+    return [
+        {"id": 1, "name": "Laptop", "price": 999.99},
+        {"id": 2, "name": "Headphones", "price": 149.99},
+        {"id": 3, "name": "Keyboard", "price": 79.99},
+    ]
+
+
+@app.get("/api/search")
+async def search(q: str = ""):
+    return {"query": q, "status": "ok", "matches": [f"Result for: {q}"]}
+

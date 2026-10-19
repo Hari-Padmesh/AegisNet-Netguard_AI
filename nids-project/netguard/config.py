@@ -10,6 +10,7 @@ prefixed with NETGUARD_.
 from __future__ import annotations
 
 import os
+import json
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
@@ -19,6 +20,16 @@ class DashboardMode(str, Enum):
     EMBEDDED = "embedded"
     SEPARATE = "separate"
     BOTH = "both"
+
+
+DEFAULT_RULE_COOLDOWNS = {
+    "http.sqli": 30.0,
+    "http.xss": 30.0,
+    "http.path_traversal": 30.0,
+    "http.failed_auth_burst": 60.0,
+    "http.sensitive_path_scan": 60.0,
+    "http.request_burst": 30.0,
+}
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -80,6 +91,7 @@ class NetGuardConfig:
 
     # Detection
     attack_confidence_threshold: float = 0.60
+    rule_cooldowns: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_RULE_COOLDOWNS))
 
     # Logging
     log_file: Optional[str] = "alerts.log"
@@ -88,6 +100,20 @@ class NetGuardConfig:
     @classmethod
     def from_env(cls, **overrides) -> "NetGuardConfig":
         """Build config from NETGUARD_* environment variables with optional overrides."""
+        rule_cooldowns = dict(DEFAULT_RULE_COOLDOWNS)
+        cooldowns_raw = os.getenv("NETGUARD_RULE_COOLDOWNS", "").strip()
+        if cooldowns_raw:
+            try:
+                cooldown_overrides = json.loads(cooldowns_raw)
+                if not isinstance(cooldown_overrides, dict):
+                    raise ValueError("NETGUARD_RULE_COOLDOWNS must be a JSON object")
+                for rule_id, seconds in cooldown_overrides.items():
+                    seconds = float(seconds)
+                    if seconds < 0:
+                        raise ValueError("Rule cooldowns must be non-negative")
+                    rule_cooldowns[str(rule_id)] = seconds
+            except (TypeError, json.JSONDecodeError) as exc:
+                raise ValueError("NETGUARD_RULE_COOLDOWNS must be a JSON object of seconds") from exc
         mode_raw = os.getenv("NETGUARD_DASHBOARD_MODE", "embedded").lower()
         try:
             dashboard_mode = DashboardMode(mode_raw)
@@ -121,6 +147,7 @@ class NetGuardConfig:
             attack_confidence_threshold=float(
                 os.getenv("NETGUARD_ATTACK_CONFIDENCE_THRESHOLD", "0.60")
             ),
+            rule_cooldowns=rule_cooldowns,
             log_file=os.getenv("NETGUARD_LOG_FILE", "alerts.log"),
             console_alerts=_env_bool("NETGUARD_CONSOLE_ALERTS", True),
         )

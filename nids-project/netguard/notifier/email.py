@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import logging
 import smtplib
+import threading
+import time
 from collections.abc import Iterable
 from email.message import EmailMessage
 from typing import TYPE_CHECKING, Optional
@@ -23,15 +25,43 @@ logger = logging.getLogger(__name__)
 
 
 class EmailNotifier(AlertNotifier):
-    """Send instant email alerts when threats are detected."""
+    """Send instant email alerts when threats are detected.
 
-    def __init__(self, config: NetGuardConfig):
+    Parameters
+    ----------
+    config : NetGuardConfig
+        SDK configuration (SMTP credentials, recipient, etc.).
+    cooldown_seconds : float
+        Minimum seconds between emails for the same attack label.
+        Prevents email floods during DoS bursts. Default: 60 s.
+        Set to 0 to disable cooldown (not recommended for production).
+    """
+
+    def __init__(self, config: NetGuardConfig, cooldown_seconds: float = 60.0):
         self._config = config
+        self._cooldown = cooldown_seconds
+        # {label: last_sent_timestamp}
+        self._last_sent: dict[str, float] = {}
+        self._lock = threading.Lock()
 
     def notify(self, alert: "Alert") -> None:
         if not self._config.smtp_configured:
             logger.debug("EmailNotifier skipped: SMTP not fully configured.")
             return
+
+        # Cooldown check — skip if same label was emailed recently
+        if self._cooldown > 0:
+            now = time.monotonic()
+            with self._lock:
+                last = self._last_sent.get(alert.label, 0.0)
+                if now - last < self._cooldown:
+                    logger.debug(
+                        "EmailNotifier cooldown active for %s (%.0fs remaining).",
+                        alert.label,
+                        self._cooldown - (now - last),
+                    )
+                    return
+                self._last_sent[alert.label] = now
 
         subject = f"[NetGuard:{self._config.project_id}] {alert.severity.value} — {alert.label}"
         body = (
@@ -42,7 +72,9 @@ class EmailNotifier(AlertNotifier):
             f"Time       : {alert.timestamp}\n"
             f"Details    : {alert.flow_summary}\n"
         )
-        self._send(subject, body)
+        # Send in a daemon thread so SMTP latency never blocks the HTTP response
+        t = threading.Thread(target=self._send, args=(subject, body), daemon=True)
+        t.start()
 
     def send_digest(self, alerts: Iterable["Alert"]) -> bool:
         """Send a summary email and return whether SMTP delivery was attempted."""

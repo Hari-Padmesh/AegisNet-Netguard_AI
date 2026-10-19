@@ -1,0 +1,1 @@
+{"old-app": {"requests": 4, "attacks": 1, "alerts": [{"label": "XSS", "severity": "HIGH"}]}}

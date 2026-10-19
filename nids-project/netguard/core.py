@@ -57,18 +57,23 @@ class NetGuard:
             model_dir = get_default_model_dir()
         self._engine = DetectionEngine(model_dir=model_dir).load()
         self._aggregator = HttpFlowAggregator(window_seconds=self.config.flow_window_seconds)
-        self._rules = ApplicationRuleEngine(window_seconds=self.config.flow_window_seconds)
+        self._rules = ApplicationRuleEngine(
+            window_seconds=self.config.flow_window_seconds,
+            cooldowns=self.config.rule_cooldowns,
+        )
+        self._dashboard_notifier: Optional[DashboardEventNotifier] = None
+        self._email_notifier: Optional[EmailNotifier] = None
+        self._digest_scheduler: Optional[DigestScheduler] = None
         self._alert_manager = self._build_alert_manager()
         self._lock = threading.Lock()
         self._request_count = 0
         self._flow_count = 0
         self._prediction_count = 0
         self._attack_count = 0
+        self._suppressed_alert_count = 0
         self._blocked_ips: dict[str, float] = {}
         self._clients: dict[str, dict[str, float | int | str | None]] = {}
         self._recent_events: list[dict] = []
-        self._email_notifier: Optional[EmailNotifier] = None
-        self._digest_scheduler: Optional[DigestScheduler] = None
 
     def _build_alert_manager(self) -> AlertManager:
         try:
@@ -91,7 +96,8 @@ class NetGuard:
         if self.config.slack_webhook_url:
             mgr.register_notifier(WebhookNotifier(self.config.slack_webhook_url, service="slack", min_severity=min_severity))
         if self.config.dashboard_mode in (DashboardMode.SEPARATE, DashboardMode.BOTH):
-            mgr.register_notifier(DashboardEventNotifier(self.config))
+            self._dashboard_notifier = DashboardEventNotifier(self.config)
+            mgr.register_notifier(self._dashboard_notifier)
 
         return mgr
 
@@ -218,8 +224,12 @@ class NetGuard:
                     path,
                 )
                 self._prediction_count += 1
-                alert = self._alert_manager.trigger(rule_result)
-                if alert is not None and alert.severity != Severity.INFO:
+                if rule_match.alert_suppressed:
+                    self._suppressed_alert_count += 1
+                    alert = None
+                else:
+                    alert = self._alert_manager.trigger(rule_result)
+                if (alert is not None or rule_match.alert_suppressed) and rule_result.is_attack:
                     self._attack_count += 1
                     client["attacks"] = int(client["attacks"]) + 1
                     client["last_attack"] = rule_result.label
@@ -232,6 +242,7 @@ class NetGuard:
                     rule_result.confidence,
                     True,
                     rule_result.detection_source,
+                    alert_suppressed=rule_match.alert_suppressed,
                 )
             else:
                 self._record_event(client_ip, method, path, "BENIGN", 1.0, False, "rules")
@@ -247,7 +258,8 @@ class NetGuard:
                 result = self._score_flow(flow)
                 if result:
                     results.append(result)
-            return results
+        self._notify_dashboard_telemetry()
+        return results
 
     def flush_idle_flows(self) -> List[PredictionResult]:
         """Score and return results for all idle flows."""
@@ -258,7 +270,8 @@ class NetGuard:
                 result = self._score_flow(flow)
                 if result:
                     results.append(result)
-            return results
+        self._notify_dashboard_telemetry()
+        return results
 
     def shutdown(self) -> List[PredictionResult]:
         """Flush remaining flows on application shutdown."""
@@ -269,7 +282,14 @@ class NetGuard:
                 result = self._score_flow(flow)
                 if result:
                     results.append(result)
-            return results
+        self._notify_dashboard_telemetry()
+        if self._dashboard_notifier is not None:
+            self._dashboard_notifier.close()
+        return results
+
+    def _notify_dashboard_telemetry(self) -> None:
+        if self._dashboard_notifier is not None:
+            self._dashboard_notifier.notify_telemetry(self.stats())
 
     def _score_flow(self, flow: HttpFlow) -> Optional[PredictionResult]:
         self._flow_count += 1
@@ -318,6 +338,7 @@ class NetGuard:
         confidence: float,
         is_attack: bool,
         detection_source: str,
+        alert_suppressed: bool = False,
     ) -> None:
         self._recent_events.append(
             {
@@ -329,6 +350,7 @@ class NetGuard:
                 "confidence": round(confidence, 3),
                 "is_attack": is_attack,
                 "detection_source": detection_source,
+                "alert_suppressed": alert_suppressed,
             }
         )
         if len(self._recent_events) > 100:
@@ -337,14 +359,28 @@ class NetGuard:
     def stats(self) -> dict:
         """Return runtime statistics for dashboards."""
         alert_stats = self._alert_manager.stats()
-        total_attacks = self._attack_count
+        now = time.time()
+        with self._lock:
+            total_requests = self._request_count
+            total_attacks = self._attack_count
+            flow_count = self._flow_count
+            prediction_count = self._prediction_count
+            suppressed_alerts = self._suppressed_alert_count
+            recent_events = list(self._recent_events[-30:])
+            clients = [(client_ip, dict(client)) for client_ip, client in self._clients.items()]
+            blocked_ips = {}
+            for client_ip, expires_at in list(self._blocked_ips.items()):
+                if expires_at > now:
+                    blocked_ips[client_ip] = expires_at
+                else:
+                    del self._blocked_ips[client_ip]
+
         threat_level = "NOMINAL" if total_attacks == 0 else "ELEVATED"
         if total_attacks >= 5:
             threat_level = "CRITICAL"
-        now = time.time()
         top_clients = []
         for client_ip, client in sorted(
-            self._clients.items(),
+            clients,
             key=lambda item: (int(item[1]["attacks"]), int(item[1]["requests"])),
             reverse=True,
         )[:15]:
@@ -356,24 +392,25 @@ class NetGuard:
                     "attacks": int(client["attacks"]),
                     "rate": round(int(client["requests"]) / elapsed, 1),
                     "last_attack": client["last_attack"],
-                    "is_blocked": self.is_ip_blocked(client_ip),
+                    "is_blocked": client_ip in blocked_ips,
                 }
             )
         return {
             "project_id": self.config.project_id,
-            "requests": self._request_count,
-            "total_requests": self._request_count,
-            "flows_scored": self._flow_count,
-            "predictions": self._prediction_count,
+            "requests": total_requests,
+            "total_requests": total_requests,
+            "flows_scored": flow_count,
+            "predictions": prediction_count,
             "attacks": total_attacks,
             "total_attacks": total_attacks,
-            "benign_requests": max(0, self._request_count - total_attacks),
+            "suppressed_alerts": suppressed_alerts,
+            "benign_requests": max(0, total_requests - total_attacks),
             "active_flows": self._aggregator.active_count,
-            "blocked_ips_count": len(self.get_blocked_ips()),
+            "blocked_ips_count": len(blocked_ips),
             "alerts": alert_stats,
             "attacks_by_label": alert_stats["by_label"],
             "attacks_by_severity": alert_stats["by_severity"],
-            "recent_events": list(self._recent_events[-30:]),
+            "recent_events": recent_events,
             "top_clients": top_clients,
             "threat_level": threat_level,
             "threat_color": {

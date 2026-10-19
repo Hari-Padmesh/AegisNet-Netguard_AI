@@ -5,16 +5,20 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "netguard"
 version = "0.2.0"
-description = "NetGuard AI: A Machine Learning Network Intrusion Detection System"
-readme = "nids-project/README.md"
+description = "Embeddable HTTP threat monitoring, intrusion detection, and dashboards for Python applications"
+readme = "README.md"
 requires-python = ">=3.11"
-authors = [
-    { name = "Developer" }
-]
+license = { file = "LICENSE" }
+keywords = ["security", "intrusion-detection", "http", "monitoring", "fastapi"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
     "Topic :: Security",
+    "License :: OSI Approved :: MIT License",
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
     "numpy>=1.24.0",
@@ -33,6 +37,9 @@ web = [
     "uvicorn[standard]>=0.23.0",
     "httpx>=0.24.0",
     "python-multipart>=0.0.6",
+]
+flask = [
+    "Flask>=2.3.0",
 ]
 train = [
     "pandas>=2.0.0",
@@ -59,3 +66,12 @@ include = ["netguard*"]
 
 [tool.setuptools.package-data]
 netguard = ["models/*", "web/static/*", "web/templates/*"]
+
+[tool.pyright]
+extraPaths = ["nids-project"]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore::starlette.exceptions.StarletteDeprecationWarning",
+]
+

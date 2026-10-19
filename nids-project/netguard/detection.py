@@ -144,6 +144,16 @@ class DetectionEngine:
     def features(self) -> List[str]:
         return self._features
 
+    def _scale(self, matrix: np.ndarray) -> np.ndarray:
+        """Transform numpy feature matrix without emitting feature name mismatch warnings."""
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                category=UserWarning,
+                message=".*X does not have valid feature names.*",
+            )
+            return self._scaler.transform(matrix)
+
     def predict(
         self,
         feature_dict: Dict[str, float],
@@ -175,7 +185,7 @@ class DetectionEngine:
         ).reshape(1, -1)
 
         # Apply the same scaler used during training
-        vector_scaled = self._scaler.transform(vector)
+        vector_scaled = self._scale(vector)
 
         # Predict class index
         label_index = int(self._model.predict(vector_scaled)[0])
@@ -210,7 +220,7 @@ class DetectionEngine:
             [[fd.get(feat, 0.0) for feat in self._features] for fd in feature_dicts],
             dtype=np.float64,
         )
-        matrix_scaled = self._scaler.transform(matrix)
+        matrix_scaled = self._scale(matrix)
         label_indices = self._model.predict(matrix_scaled).astype(int)
 
         if hasattr(self._model, "predict_proba"):
