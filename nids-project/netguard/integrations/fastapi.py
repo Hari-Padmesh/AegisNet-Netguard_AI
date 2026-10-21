@@ -152,9 +152,9 @@ class NetGuardLifespanMiddleware:
 
 def setup_netguard(app, guard: NetGuard, mount_dashboard: bool = True) -> NetGuard:
     """
-    Attach NetGuard to a FastAPI application. When SMTP is configured and
-    weekly digests are enabled, the digest scheduler starts with the ASGI app
-    and stops when it shuts down.
+    Attach NetGuard to a FastAPI application. When the selected email provider
+    is configured and weekly digests are enabled, the digest scheduler starts
+    with the ASGI app and stops when it shuts down.
 
     Parameters
     ----------

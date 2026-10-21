@@ -44,12 +44,19 @@ class NetGuardConfig:
     """
     Runtime configuration for NetGuard SDK integrations.
 
-    Gmail SMTP (local dev):
+    SMTP email delivery:
+        NETGUARD_EMAIL_PROVIDER=smtp
         NETGUARD_SMTP_HOST=smtp.gmail.com
         NETGUARD_SMTP_PORT=587
         NETGUARD_SMTP_USER=you@gmail.com
         NETGUARD_SMTP_PASSWORD=<app-password>
         NETGUARD_SMTP_FROM=you@gmail.com
+        NETGUARD_ALERT_EMAIL=owner@gmail.com
+
+    Resend HTTPS API delivery (use when SMTP egress is unavailable):
+        NETGUARD_EMAIL_PROVIDER=resend
+        NETGUARD_RESEND_API_KEY=<api-key>
+        NETGUARD_RESEND_FROM=onboarding@resend.dev
         NETGUARD_ALERT_EMAIL=owner@gmail.com
     """
 
@@ -73,6 +80,9 @@ class NetGuardConfig:
 
     # Alert channels
     alert_email: str = ""
+    email_provider: str = "smtp"
+    resend_api_key: str = ""
+    resend_from: str = "onboarding@resend.dev"
     webhook_url: str = ""
     slack_webhook_url: str = ""
 
@@ -133,6 +143,9 @@ class NetGuardConfig:
             auth_password=os.getenv("NETGUARD_AUTH_PASSWORD", ""),
             auth_api_key=os.getenv("NETGUARD_AUTH_API_KEY", ""),
             alert_email=os.getenv("NETGUARD_ALERT_EMAIL", ""),
+            email_provider=os.getenv("NETGUARD_EMAIL_PROVIDER", "smtp").strip().lower(),
+            resend_api_key=os.getenv("NETGUARD_RESEND_API_KEY", ""),
+            resend_from=os.getenv("NETGUARD_RESEND_FROM", "onboarding@resend.dev"),
             webhook_url=os.getenv("NETGUARD_WEBHOOK_URL", ""),
             slack_webhook_url=os.getenv("NETGUARD_SLACK_WEBHOOK", ""),
             smtp_host=os.getenv("NETGUARD_SMTP_HOST", "smtp.gmail.com"),
@@ -177,3 +190,16 @@ class NetGuardConfig:
     @property
     def smtp_configured(self) -> bool:
         return bool(self.smtp_host and self.smtp_user and self.smtp_password and self.alert_email)
+
+    @property
+    def resend_configured(self) -> bool:
+        return bool(self.resend_api_key and self.resend_from and self.alert_email)
+
+    @property
+    def email_configured(self) -> bool:
+        provider = self.email_provider.strip().lower()
+        if provider == "resend":
+            return self.resend_configured
+        if provider == "smtp":
+            return self.smtp_configured
+        return False

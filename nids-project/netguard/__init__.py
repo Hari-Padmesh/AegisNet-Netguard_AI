@@ -12,7 +12,7 @@ from netguard.config import DashboardMode, NetGuardConfig
 from netguard.core import NetGuard
 from netguard.detection import DetectionEngine, PredictionResult
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 __author__ = "NetGuard AI"
 
 __all__ = [

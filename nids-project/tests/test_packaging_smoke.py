@@ -21,7 +21,7 @@ from netguard.integrations.fastapi import setup_netguard
 def test_package_metadata():
     """Package should expose canonical __version__ and __all__."""
     assert hasattr(netguard, "__version__")
-    assert netguard.__version__ == "0.2.0"
+    assert netguard.__version__ == "0.2.1"
     assert "NetGuard" in netguard.__all__
     assert "DetectionEngine" in netguard.__all__
 

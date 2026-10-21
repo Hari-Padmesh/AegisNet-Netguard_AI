@@ -4,7 +4,8 @@
   const menuButton = document.getElementById("menu-button");
   const search = document.getElementById("doc-search");
   const links = Array.from(document.querySelectorAll(".nav-link"));
-  const sections = links.map((link) => document.querySelector(link.getAttribute("href"))).filter(Boolean);
+  const sectionLinks = links.filter((link) => link.getAttribute("href")?.startsWith("#"));
+  const sections = sectionLinks.map((link) => document.querySelector(link.getAttribute("href"))).filter(Boolean);
   const closeMenu = () => {
     sidebar.classList.remove("open");
     backdrop.classList.remove("show");
@@ -31,7 +32,7 @@
   });
   search.addEventListener("input", () => {
     const query = search.value.trim().toLowerCase();
-    links.forEach((link) => {
+    sectionLinks.forEach((link) => {
       const section = document.querySelector(link.getAttribute("href"));
       const matches = !query || (section && section.innerText.toLowerCase().includes(query));
       link.hidden = !matches;
@@ -45,7 +46,7 @@
       search.blur();
     }
     if (event.key === "Enter") {
-      const first = links.find((link) => !link.hidden);
+      const first = sectionLinks.find((link) => !link.hidden);
       if (first) document.querySelector(first.getAttribute("href")).scrollIntoView({ behavior: "smooth" });
     }
   });

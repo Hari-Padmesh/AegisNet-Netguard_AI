@@ -2,17 +2,31 @@
 .env.local
 .venv
 .venv/
-.venv-pypi-safe
-.venv-pypi-check
-.venv-pypi-live-check
+.venv-pypi-safe/
+.venv-pypi-check/
+.venv-pypi-live-check/
 __pycache__/
 *.py[cod]
 *.egg-info/
 alerts.log
 .claude
 .claude/
-
+dist*
 dist/
 dist-netguard-threat-monitor/
 #dataset
 data/
+NetGuard_Project_Report.docx
+dist-release-0.2.1
+sqlite-check.db
+
+# Local SQLite databases and journal files
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+
+# Generated project documentation and report
+/PROJECT_GUIDE.md
+/NetGuard_Project_Report.docx

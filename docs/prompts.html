@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1220">
+  <meta name="description" content="Copy-ready prompts for coding agents to add NetGuard to FastAPI, Django, Flask, or train a model.">
+  <title>Coding Agent Prompts · NetGuard Docs</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <button id="menu-button" class="menu-button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+  <a class="brand" href="index.html"><b>N</b> NetGuard <small>DOCS</small></a>
+  <div class="top-links"><a href="index.html">Guide</a><a href="reference.html">API reference</a><a href="https://pypi.org/project/netguard-threat-monitor/">PyPI ↗</a></div>
+</header>
+<aside class="sidebar" id="sidebar">
+  <label class="search"><span>⌕</span><input id="doc-search" type="search" placeholder="Search prompts" aria-label="Search prompts"><kbd>/</kbd></label>
+  <nav>
+    <p>CHOOSE A TASK</p>
+    <a class="nav-link active" href="#fastapi">FastAPI integration</a>
+    <a class="nav-link" href="#django">Django integration</a>
+    <a class="nav-link" href="#flask">Flask integration</a>
+    <a class="nav-link" href="#training">Train/evaluate model</a>
+    <a class="nav-link" href="#render">Deploy to Render</a>
+    <p>REFERENCE</p>
+    <a class="nav-link" href="reference.html">Package API reference ↗</a>
+    <a class="nav-link" href="index.html">Main guide ↗</a>
+  </nav>
+  <div class="side-foot"><i></i> Copy, paste, adapt</div>
+</aside>
+<button class="backdrop" id="backdrop" aria-label="Close navigation"></button>
+<main id="top"><div class="content">
+  <div class="eyebrow"><i></i> HANDS-ON SETUP <span>/</span> CODING AGENTS</div>
+  <section class="hero"><div><h1>Give your coding agent<br>a good brief.</h1><p>Copy a prompt into your coding agent while it has your application repository open. Each brief asks the agent to inspect your project first and integrate NetGuard without replacing your app.</p><a class="button" href="reference.html">Read the API reference →</a><div class="hero-meta">Works with Codex, Claude Code, Cursor, Copilot and similar agents</div></div><div class="preview"><div class="preview-head">BEFORE YOU PASTE <b><i></i> CHECK</b></div><div class="event"><span class="cyan">01</span><span><b>Open the app repository</b><small>Not the NetGuard library repository</small></span><em>CONTEXT</em></div><div class="event"><span class="amber">02</span><span><b>Choose the matching framework</b><small>FastAPI, Django, Flask, or training</small></span><em>FIT</em></div><div class="event"><span class="green">03</span><span><b>Keep credentials in secrets</b><small>Never paste API keys into source code</small></span><em>SAFE</em></div></div></section>
+  <div class="notice"><b>i</b><span>Replace bracketed values such as <code>[PROJECT NAME]</code> with your choices. Keep your coding agent in the project repository. Review the edits and deployment settings before publishing.</span></div>
+
+  <section class="doc" id="fastapi"><label>FRAMEWORK 01</label><h2>Add NetGuard to FastAPI</h2><p>Use this for an existing FastAPI app that should host the embedded dashboard at <code>/netguard/</code>.</p><div class="code"><header>COPY PROMPT <button class="copy">Copy</button></header><pre><code>I want to add NetGuard threat monitoring to this existing FastAPI application.
+
+First inspect the repository: identify the application entry point, dependency manager, ASGI server command, existing middleware order, deployment platform, and current tests. Do not replace routes, authentication, database code, or deployment configuration unrelated to this task.
+
+Use the published package `netguard-threat-monitor[web]` (Python import name `netguard`). Integrate the current public API using `NetGuardConfig.from_env(project_id="[PROJECT NAME]")`, `NetGuard(config=config)`, and `setup_netguard(app, guard)` from `netguard.integrations.fastapi`. Preserve the existing app object and route behavior. Keep the dashboard at the configured `/netguard` path and ensure its Basic Auth credentials come from environment variables or the deployment secret manager.
+
+Document the exact dependency and start command for this repository. Add only the minimum code/config needed. Do not hardcode or commit passwords, API keys, SMTP passwords, or Resend keys. Do not enable automatic IP blocking unless I explicitly request it. Explain what requests NetGuard observes, where the dashboard is, and any proxy/client-IP trust assumptions.
+
+At the end, summarize changed files, environment variables I must configure, local commands to run, and focused verification steps. Do not deploy or publish anything.</code></pre></div></section>
+
+  <section class="doc" id="django"><label>FRAMEWORK 02</label><h2>Add NetGuard to Django</h2><p>The current Django integration is middleware-oriented. It does not mount the embedded dashboard; ask the agent to configure central reporting if you need a browser dashboard.</p><div class="code"><header>COPY PROMPT <button class="copy">Copy</button></header><pre><code>Integrate NetGuard into this existing Django project.
+
+Inspect the Django version, settings modules, installed apps, middleware list, WSGI/ASGI entry point, environment management, deployment platform, and tests before editing. Preserve the project's existing middleware and request behavior.
+
+Use `netguard-threat-monitor[web]`. Add `netguard.integrations.django.NetGuardDjangoMiddleware` to the middleware stack in an appropriate position, and configure NetGuard using documented `NETGUARD_*` environment variables. Keep all credentials in the host's secret manager; do not write secret values into source files.
+
+Important: the current Django middleware observes traffic and honors NetGuard IP blocks, but it does not mount the embedded `/netguard/` dashboard. If a dashboard is wanted, explain and configure the supported separate dashboard reporting mode, including project ID, dashboard URL, matching authentication/API-key settings, and a secure network path. Do not claim that simply adding the middleware creates a dashboard in Django.
+
+Make the smallest necessary changes. Add or update setup documentation and focused tests if the repository already has an appropriate test pattern. Do not enable automatic blocking unless explicitly requested. Finish with changed files, required environment variables, local run commands, deployment settings, and verification steps. Do not deploy.</code></pre></div></section>
+
+  <section class="doc" id="flask"><label>FRAMEWORK 03</label><h2>Add NetGuard to Flask</h2><p>This uses the separate, legacy Flask extension in <code>netguard.integrations.flask</code>.</p><div class="code"><header>COPY PROMPT <button class="copy">Copy</button></header><pre><code>Add the NetGuard Flask extension to this existing Flask application.
+
+Inspect the app factory, Flask version, routing, reverse proxy setup, dependencies, deployment configuration, and tests first. Preserve all current routes and request handling.
+
+Install/configure `netguard-threat-monitor[flask]` and integrate `NetGuardFlask` from `netguard.integrations.flask`. Support this project's app-factory pattern by calling `init_app(app)` where appropriate. Keep `block_attacks=False` unless I explicitly approve automatic blocking, and configure any alert webhook or log path through secrets/settings rather than hardcoded values.
+
+Security requirement: the current legacy Flask dashboard/API routes do not provide built-in authentication. Default to `dashboard=False` for a public production deployment unless you can place those routes behind the app's existing authentication or a trusted access-control proxy. Explain the selected mount path and how to verify that dashboard routes are protected.
+
+Make the smallest required changes. Do not replace the project's auth, routes, or deployment process. Summarize changed files, dependency changes, environment variables/secrets, local verification commands, and known limitations. Do not deploy or publish.</code></pre></div></section>
+
+  <section class="doc" id="training"><label>MODEL WORKFLOW</label><h2>Prepare data, train, and evaluate</h2><p>Use this when you have authorized CICIDS-style CSV data and want the agent to make the data/model workflow reproducible.</p><div class="code"><header>COPY PROMPT <button class="copy">Copy</button></header><pre><code>Help me use NetGuard's training and evaluation functions with my local network-flow CSV dataset.
+
+Inspect this repository's NetGuard version, dataset files and licenses, CSV column names, label column, available disk/RAM, existing model artifacts, and training scripts before running anything. Do not upload data. Do not overwrite existing models or processed data until you explain the output paths and I approve.
+
+Use the supported `netguard-threat-monitor[train]` extra and the existing public functions: `load_and_clean`, `encode_labels`, `split_data`, `select_features_by_importance`, `scale_features`, and `train_pipeline` in their documented modules. For evaluation use `run_evaluation` and its stored test set. Check that labels and feature columns are compatible with NetGuard's expected model inputs. Do not invent metrics or claim model quality from training accuracy alone; report macro-F1 and per-class false-positive rates where available.
+
+Prepare a safe, reproducible command sequence and explain dataset placement, expected runtime/memory, model output files, and how to roll back to the bundled model. Ask before launching a long-running training job or replacing artifacts. Do not publish datasets or model files.</code></pre></div></section>
+
+  <section class="doc" id="render"><label>DEPLOYMENT WORKFLOW</label><h2>Deploy the Python app to Render</h2><p>Use this for a Python web service. The documentation site itself uses a separate static-site deployment described in the API reference.</p><div class="code"><header>COPY PROMPT <button class="copy">Copy</button></header><pre><code>Prepare this FastAPI application, integrated with NetGuard, for deployment as a Render Web Service.
+
+Inspect the repository root, requirements/lock file, Python version, FastAPI entry point, NetGuard configuration, and existing deployment files. Determine whether this is a monorepo and identify the correct Render root directory. Do not assume the service source is at the repository root.
+
+Make only necessary deployment changes. Confirm that production dependencies include `netguard-threat-monitor[web]` and any currently required runtime dependencies. Use a production Uvicorn command binding to `0.0.0.0` and Render's `$PORT`; do not use `--reload`. Keep `NETGUARD_AUTH_USERNAME`, `NETGUARD_AUTH_PASSWORD`, and any email-provider API key in Render Environment secrets, never in Git. Include a secure health check only if the app has an appropriate route.
+
+Do not create or modify a paid service, push commits, connect an account, or deploy. Give me the Render dashboard values for Root Directory, Build Command, Start Command, and required Environment keys, plus local verification commands and expected app/dashboard URLs.</code></pre></div></section>
+
+  <section class="doc"><label>HOW TO USE THESE PROMPTS</label><h2>Get a useful result from your agent</h2><div class="checklist"><p><b>01</b> Open your application repository in the coding agent.</p><p><b>02</b> Paste only the prompt that matches your framework or task.</p><p><b>03</b> Replace bracketed placeholders and answer questions about your deployment setup.</p><p><b>04</b> Review the proposed diff, environment keys, and security notes before pushing.</p><p><b>05</b> Put secrets in the hosting provider's secret settings; never in prompt history that is shared or committed configuration.</p></div><div class="callout warning"><b>REVIEW</b><span>A coding agent can edit files but cannot infer your hosting account settings or create provider credentials. You must create API keys and configure secrets yourself.</span></div></section>
+  <footer><span><b class="foot-mark">N</b> NetGuard · MIT License</span><a href="index.html">Main guide</a><a href="reference.html">API reference</a><a href="#top">Back to top ↑</a></footer>
+</div></main><script src="script.js"></script></body>
+</html>

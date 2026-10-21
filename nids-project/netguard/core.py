@@ -18,6 +18,7 @@ from netguard.config import DashboardMode, NetGuardConfig
 from netguard.detection import DetectionEngine, PredictionResult, get_default_model_dir
 from netguard.digest import DigestScheduler
 from netguard.notifier.email import EmailNotifier
+from netguard.notifier.resend import ResendEmailNotifier
 from netguard.notifier.dashboard import DashboardEventNotifier
 from netguard.notifier.webhook import WebhookNotifier
 from netguard.rules import ApplicationRuleEngine
@@ -62,7 +63,7 @@ class NetGuard:
             cooldowns=self.config.rule_cooldowns,
         )
         self._dashboard_notifier: Optional[DashboardEventNotifier] = None
-        self._email_notifier: Optional[EmailNotifier] = None
+        self._email_notifier: Optional[EmailNotifier | ResendEmailNotifier] = None
         self._digest_scheduler: Optional[DigestScheduler] = None
         self._alert_manager = self._build_alert_manager()
         self._lock = threading.Lock()
@@ -88,9 +89,20 @@ class NetGuard:
             console_alerts=self.config.console_alerts,
         )
 
-        if self.config.smtp_configured:
+        email_provider = self.config.email_provider.strip().lower()
+        if email_provider == "resend":
+            if self.config.resend_configured:
+                self._email_notifier = ResendEmailNotifier(self.config)
+                mgr.register_notifier(self._email_notifier)
+            else:
+                logger.warning(
+                    "Resend email provider selected, but API key, sender, or recipient is missing."
+                )
+        elif email_provider == "smtp" and self.config.smtp_configured:
             self._email_notifier = EmailNotifier(self.config)
             mgr.register_notifier(self._email_notifier)
+        elif email_provider not in {"smtp", "resend", "none", "disabled"}:
+            logger.warning("Unknown NetGuard email provider '%s'; email alerts are disabled.", email_provider)
         if self.config.webhook_url:
             mgr.register_notifier(WebhookNotifier(self.config.webhook_url, min_severity=min_severity))
         if self.config.slack_webhook_url:
@@ -102,7 +114,7 @@ class NetGuard:
         return mgr
 
     def send_weekly_digest(self) -> bool:
-        """Send the current alert history as a digest when SMTP is configured."""
+        """Send the current alert history using the configured email provider."""
         if self._email_notifier is None:
             return False
         return self._email_notifier.send_digest(self._alert_manager.history)

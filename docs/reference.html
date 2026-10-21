@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1220">
+  <meta name="description" content="NetGuard 0.2.1 API reference grouped by the web, train, and flask package extras.">
+  <title>API Reference · NetGuard Docs</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <button id="menu-button" class="menu-button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+  <a class="brand" href="index.html"><b>N</b> NetGuard <small>DOCS</small></a>
+  <div class="top-links"><a href="index.html">Guide</a><a href="prompts.html">Agent prompts</a><a href="https://pypi.org/project/netguard-threat-monitor/">PyPI ↗</a></div>
+</header>
+<aside class="sidebar" id="sidebar">
+  <label class="search"><span>⌕</span><input id="doc-search" type="search" placeholder="Search reference" aria-label="Search reference"><kbd>/</kbd></label>
+  <nav>
+    <p>PACKAGE EXTRAS</p>
+    <a class="nav-link active" href="#web">[web] runtime API</a>
+    <a class="nav-link" href="#web-cli">[web] commands</a>
+    <a class="nav-link" href="#train">[train] model functions</a>
+    <a class="nav-link" href="#train-cli">[train] commands</a>
+    <a class="nav-link" href="#flask">[flask] API</a>
+    <p>MORE</p>
+    <a class="nav-link" href="#publish">Deploy this site</a>
+    <a class="nav-link" href="prompts.html">Copy-ready agent prompts ↗</a>
+    <a class="nav-link" href="index.html">Main guide ↗</a>
+  </nav>
+  <div class="side-foot"><i></i> NetGuard 0.2.1 API reference</div>
+</aside>
+<button class="backdrop" id="backdrop" aria-label="Close navigation"></button>
+<main id="top"><div class="content">
+  <div class="eyebrow"><i></i> REFERENCE <span>/</span> PACKAGE EXTRAS</div>
+  <section class="hero"><div><h1>What each extra<br>puts in your hands.</h1><p>Install only the framework or analysis tools you need. This reference lists the public integration points, functions, commands, and limits in NetGuard 0.2.1.</p><a class="button" href="prompts.html">Copy a setup prompt →</a><div class="hero-meta">Distribution: netguard-threat-monitor <i></i> Python imports: netguard</div></div><div class="preview"><div class="preview-head">INSTALL THE EXTRA <b><i></i> PYTHON 3.11+</b></div><div class="event"><span class="cyan">01</span><span><b>[web]</b><small>FastAPI, Django, dashboard and HTTP support</small></span><em>APP RUNTIME</em></div><div class="event"><span class="amber">02</span><span><b>[train]</b><small>Data preparation, training and PCAP tools</small></span><em>ANALYSIS</em></div><div class="event"><span class="green">03</span><span><b>[flask]</b><small>Legacy Flask extension</small></span><em>FLASK</em></div></div></section>
+  <div class="notice"><b>i</b><span><strong>Reading this reference.</strong> “Public API” means intended integration points. Names prefixed with an underscore are internal helpers and are not listed as supported entry points. Some training and live-capture commands need data files, Scapy, or OS privileges.</span></div>
+
+  <section class="doc" id="web"><label>EXTRA 01 · WEB</label><h2><code>[web]</code> framework integrations and dashboard</h2><p>Install with <code>python -m pip install "netguard-threat-monitor[web]"</code>. This extra provides FastAPI, Django, Uvicorn, HTTPX, and multipart support. It includes the FastAPI embedded dashboard, standalone multi-project dashboard, proxy, and web alert integrations.</p>
+    <h3>Core SDK calls used by web apps</h3>
+    <div class="table-wrap"><table><thead><tr><th>Symbol</th><th>What it does</th><th>Typical use</th></tr></thead><tbody>
+      <tr><td><code>NetGuard(config=None, **kwargs)</code></td><td>Loads the bundled model and creates the rules, flow aggregator, alert manager, and runtime state. With keyword settings, it reads the remaining <code>NETGUARD_*</code> variables.</td><td><code>guard = NetGuard(project_id="orders", auth_username=..., auth_password=...)</code></td></tr>
+      <tr><td><code>NetGuardConfig.from_env(**overrides)</code></td><td>Loads supported environment settings and lets explicit values override them.</td><td><code>config = NetGuardConfig.from_env(project_id="orders")</code></td></tr>
+      <tr><td><code>config.validate_auth()</code></td><td>Raises <code>ValueError</code> unless dashboard username/password or an API key is configured.</td><td>Usually called by <code>NetGuard</code> during construction.</td></tr><tr><td><code>smtp_configured</code>, <code>resend_configured</code>, <code>email_configured</code></td><td>Read-only properties reporting whether the selected provider has the required sender, recipient, and credentials.</td><td>Use for configuration diagnostics.</td></tr>
+      <tr><td><code>setup_netguard(app, guard, mount_dashboard=True)</code></td><td>Attaches FastAPI request and lifespan middleware; by default, mounts the authenticated dashboard at the configured path.</td><td>Call once after creating the FastAPI app and guard.</td></tr>
+      <tr><td><code>NetGuardMiddleware(app, guard)</code></td><td>ASGI middleware that measures request metadata, evaluates rules, and sends data to the guard.</td><td>Prefer <code>setup_netguard</code>, which also attaches lifecycle handling.</td></tr>
+      <tr><td><code>NetGuardDjangoMiddleware(get_response, guard=None)</code></td><td>Django middleware that records each request/response and returns 403 for an IP already blocked in that process.</td><td>Add <code>"netguard.integrations.django.NetGuardDjangoMiddleware"</code> to Django’s <code>MIDDLEWARE</code>.</td></tr>
+      <tr><td><code>create_dashboard_app(guard)</code></td><td>Creates the authenticated Starlette dashboard app for a guard. <code>setup_netguard</code> calls it when mounting the embedded dashboard.</td><td>Use directly only when you need to mount the dashboard yourself.</td></tr>
+      <tr><td><code>create_dashboard_server_app(username, password, api_key="", storage_path=...)</code></td><td>Creates the standalone authenticated dashboard that receives events and telemetry from several services; persists project data in SQLite.</td><td>CLI equivalent: <code>netguard serve</code>.</td></tr>
+      <tr><td><code>create_proxy_app(target, guard)</code></td><td>Creates an HTTP reverse proxy that forwards requests through NetGuard monitoring.</td><td>CLI equivalent: <code>netguard proxy</code>.</td></tr>
+    </tbody></table></div>
+    <h3>Runtime methods on <code>NetGuard</code></h3>
+    <div class="table-wrap"><table><thead><tr><th>Method</th><th>Purpose</th></tr></thead><tbody>
+      <tr><td><code>engine</code>, <code>alert_manager</code>, <code>request_count</code>, <code>attack_count</code></td><td>Read-only properties exposing the detection engine, alert manager, request total, and attack total.</td></tr><tr><td><code>stats()</code></td><td>Returns request, flow, prediction, attack, client, blocked-IP, and threat-level statistics.</td></tr>
+      <tr><td><code>recent_alerts(limit=50)</code></td><td>Returns recent alert objects.</td></tr>
+      <tr><td><code>block_ip(client_ip, duration_seconds=300.0)</code> / <code>unblock_ip(client_ip)</code></td><td>Adds or removes a temporary in-process client block. Detection alone does not automatically block a client in FastAPI’s core SDK.</td></tr>
+      <tr><td><code>is_ip_blocked(client_ip)</code> / <code>get_blocked_ips()</code></td><td>Checks active block state or returns active blocks and their expiry timestamps.</td></tr>
+      <tr><td><code>register_notifier(notifier)</code></td><td>Registers an object implementing <code>notify(alert)</code> with the alert manager.</td></tr>
+      <tr><td><code>on_alert(callback)</code></td><td>Registers a callback invoked when an alert is dispatched.</td></tr>
+      <tr><td><code>process_request(...)</code></td><td>Records one HTTP exchange, evaluates deterministic rules, and scores completed flows. Framework middleware normally calls this.</td></tr>
+      <tr><td><code>flush_idle_flows()</code> / <code>shutdown()</code></td><td>Scores idle flows or flushes pending flows during application shutdown.</td></tr>
+      <tr><td><code>send_weekly_digest()</code>, <code>start_digest_scheduler()</code>, <code>stop_digest_scheduler()</code></td><td>Sends a digest through the configured email provider or manages the FastAPI weekly scheduler.</td></tr>
+    </tbody></table></div>
+    <h3>Alert delivery classes</h3><p>These are available from <code>netguard.notifier</code>. Most applications configure the built-in provider with environment variables rather than constructing a notifier themselves.</p>
+    <div class="table-wrap"><table><thead><tr><th>Class</th><th>Purpose and configuration</th></tr></thead><tbody>
+      <tr><td><code>AlertNotifier</code></td><td>Base protocol: implement <code>notify(alert)</code> for a custom channel.</td></tr>
+      <tr><td><code>EmailNotifier(config, cooldown_seconds=60.0)</code></td><td>Immediate SMTP email alerts and digest delivery.</td></tr>
+      <tr><td><code>ResendEmailNotifier(config, cooldown_seconds=60.0)</code></td><td>Immediate alerts and digest delivery through Resend HTTPS API. Set <code>NETGUARD_EMAIL_PROVIDER=resend</code> and the Resend API key, sender, and recipient.</td></tr>
+      <tr><td><code>WebhookNotifier(url, service="auto", min_severity=MEDIUM, cooldown_seconds=10.0)</code></td><td>Generic JSON, Discord, or Slack webhook notifications.</td></tr>
+      <tr><td><code>DashboardEventNotifier(config)</code></td><td>Reports alerts and telemetry to the configured central dashboard when dashboard mode is <code>separate</code> or <code>both</code>.</td></tr>
+    </tbody></table></div>
+    <h3>Alert and authentication helpers</h3><p>These lower-level functions are imported from their modules, not the package root.</p>
+    <div class="table-wrap"><table><thead><tr><th>Symbol</th><th>Purpose</th><th>Import path</th></tr></thead><tbody>
+      <tr><td><code>Alert.to_dict()</code>, <code>Severity</code>, <code>score_severity(result)</code></td><td>Represent an alert, select one of the five severity levels, and convert alerts to JSON-safe dictionaries.</td><td><code>netguard.alerts</code></td></tr>
+      <tr><td><code>AlertManager.register_callback(fn)</code>, <code>register_notifier(notifier)</code></td><td>Subscribe callbacks and notification channels to dispatched alerts.</td><td><code>netguard.alerts</code></td></tr>
+      <tr><td><code>AlertManager.trigger(result)</code>, <code>history</code>, <code>attack_count</code>, <code>stats()</code></td><td>Score and dispatch a prediction, then inspect recorded alerts and counts.</td><td><code>netguard.alerts</code></td></tr>
+      <tr><td><code>verify_api_key(value, config)</code>, <code>verify_basic_auth(user, password, config)</code></td><td>Compare credentials against NetGuard configuration using constant-time comparison.</td><td><code>netguard.auth</code></td></tr>
+      <tr><td><code>authenticate_request(authorization, config)</code></td><td>Validate a bearer API key or raise <code>AuthenticationError</code>.</td><td><code>netguard.auth</code></td></tr>
+      <tr><td><code>create_fastapi_auth_dependency(config)</code></td><td>Return a FastAPI dependency accepting configured Basic Auth or bearer API-key credentials.</td><td><code>netguard.auth</code>; requires <code>[web]</code></td></tr>
+    </tbody></table></div>
+    <div class="code"><header>FASTAPI · LOAD CONFIGURATION FROM RENDER OR A SECRET MANAGER <button class="copy">Copy</button></header><pre><code>from fastapi import FastAPI
+from netguard import NetGuard, NetGuardConfig
+from netguard.integrations.fastapi import setup_netguard
+
+app = FastAPI()
+config = NetGuardConfig.from_env(project_id="orders-api")
+guard = NetGuard(config=config)
+setup_netguard(app, guard)
+
+@app.get("/")
+async def home():
+    return {"ok": True}</code></pre></div>
+    <p>FastAPI mounts the embedded dashboard. Django middleware does not mount that dashboard; use a separate central dashboard if you want a browser dashboard for Django traffic.</p>
+  </section>
+
+  <section class="doc" id="web-cli"><label>EXTRA 01 · WEB CLI</label><h2>Web commands</h2>
+    <div class="table-wrap"><table><thead><tr><th>Command</th><th>Function</th><th>Required options / notes</th></tr></thead><tbody>
+      <tr><td><code>netguard serve</code></td><td>Start the multi-project dashboard server.</td><td><code>--auth-username</code>, <code>--auth-password</code>; optional <code>--api-key</code>, <code>--host</code>, <code>--port</code>, <code>--storage</code>.</td></tr>
+      <tr><td><code>netguard proxy</code></td><td>Run a monitored reverse proxy to an upstream HTTP application.</td><td>Required <code>--target</code>, <code>--project-id</code>, dashboard username/password; optional host, port, model dir, API key.</td></tr>
+      <tr><td><code>netguard dashboard-web</code></td><td>Start the web dashboard as a standalone single-project app.</td><td>Set <code>NETGUARD_AUTH_USERNAME</code> and <code>NETGUARD_AUTH_PASSWORD</code>; optional host, port, project ID, API key.</td></tr>
+      <tr><td><code>netguard digest --send</code></td><td>Send a digest immediately using the configured SMTP or Resend provider.</td><td>Uses <code>NETGUARD_*</code> settings. The live FastAPI scheduler sends weekly digests automatically when enabled.</td></tr>
+    </tbody></table></div>
+    <h3>Embedded and central dashboard routes</h3>
+    <div class="table-wrap"><table><thead><tr><th>Embedded route under <code>/netguard</code></th><th>Method</th><th>Purpose</th></tr></thead><tbody>
+      <tr><td><code>/</code>, <code>/health</code>, <code>/api/stats</code>, <code>/api/alerts</code></td><td>GET</td><td>Dashboard page, health, current statistics, recent alerts.</td></tr>
+      <tr><td><code>/api/block-ip</code></td><td>POST</td><td>JSON <code>{"ip":"203.0.113.8","action":"block"}</code>; use <code>"unblock"</code> to remove a block.</td></tr>
+      <tr><td><code>/api/events</code></td><td>POST</td><td>Accept a remote event on an embedded dashboard.</td></tr>
+      <tr><td><code>/ws</code></td><td>WebSocket</td><td>Live telemetry and alert events.</td></tr>
+    </tbody></table></div><p>The embedded dashboard requires Basic Auth or a bearer API key. The standalone service adds <code>/api/projects</code> and <code>/api/telemetry</code> for central reporting.</p>
+  </section>
+
+  <section class="doc" id="train"><label>EXTRA 02 · TRAINING AND OFFLINE ANALYSIS</label><h2><code>[train]</code> data, models, evaluation, and PCAP</h2><p>Install with <code>python -m pip install "netguard-threat-monitor[train]"</code>. The extra includes pandas, imbalanced-learn, SHAP, Optuna, plotting tools, Streamlit, and Scapy. Current built-in functions use pandas and plotting libraries for training/evaluation, and Scapy for PCAP/live packet commands. SHAP, Optuna, Streamlit, and imbalanced-learn are installed by the extra but are not currently invoked by the package’s built-in CLI commands.</p>
+    <h3>Data preparation and feature utilities</h3>
+    <div class="table-wrap"><table><thead><tr><th>Function</th><th>Module</th><th>Purpose</th></tr></thead><tbody>
+      <tr><td><code>load_and_clean(raw_dir, file_pattern="*.csv", drop_zero_variance=True, verbose=True)</code></td><td><code>netguard.preprocessing</code></td><td>Loads matching CSVs, normalizes columns and labels, removes invalid/duplicate rows, and optionally drops constant numeric columns. Expects a <code>Label</code> column.</td></tr>
+      <tr><td><code>encode_labels(df, collapse_to_families=True, label_col="Label")</code></td><td><code>netguard.preprocessing</code></td><td>Optionally groups fine-grained CICIDS-style labels into attack families; returns the updated DataFrame and sorted class names.</td></tr>
+      <tr><td><code>split_data(df, label_col="label_encoded", drop_cols=None, test_size=0.2, random_state=42, stratify=True)</code></td><td><code>netguard.features</code></td><td>Returns train/test features and labels; stratifies by label by default.</td></tr>
+      <tr><td><code>scale_features(X_train, X_test)</code></td><td><code>netguard.features</code></td><td>Fits <code>StandardScaler</code> on training data only, transforms both sets, and returns both DataFrames plus the scaler.</td></tr>
+      <tr><td><code>select_features_by_importance(X_train, y_train, top_n=20, random_state=42)</code></td><td><code>netguard.features</code></td><td>Fits a Random Forest and returns the names of the top features by feature importance.</td></tr>
+    </tbody></table></div>
+    <h3>Train and evaluate</h3>
+    <div class="table-wrap"><table><thead><tr><th>Function</th><th>Purpose</th></tr></thead><tbody>
+      <tr><td><code>build_models(random_state=42)</code></td><td>Creates Logistic Regression, Random Forest, and XGBoost candidate classifiers.</td></tr>
+      <tr><td><code>run_cv_comparison(models, X_train, y_train, cv_folds=5, cv_jobs=-1)</code></td><td>Compares candidates with stratified cross-validation using macro-F1; returns a sorted results DataFrame.</td></tr>
+      <tr><td><code>train_pipeline(data_dir="data/raw/", top_n_features=20, cv_folds=5, cv_jobs=2, collapse_families=True, model_dir="models")</code></td><td>Runs preparation, feature selection, scaling, CV comparison and fit; writes model, scaler, metadata, and processed test CSV files; returns metadata.</td></tr>
+      <tr><td><code>load_artifacts(model_dir="models")</code></td><td>Loads the model, scaler, and metadata files.</td></tr>
+      <tr><td><code>compute_fpr_per_class(y_true, y_pred, classes)</code></td><td>Returns per-class one-vs-rest false-positive rates and a confusion matrix.</td></tr>
+      <tr><td><code>plot_confusion_matrix(cm, classes, save_path)</code> / <code>plot_roc_curves(y_true, y_proba, classes, save_path)</code></td><td>Writes evaluation figures to disk.</td></tr>
+      <tr><td><code>run_evaluation(model_dir="models", figures_dir="reports/figures")</code></td><td>Evaluates the saved model against <code>data/processed/test_set.csv</code>, writes figures and summary JSON, and returns metrics.</td></tr>
+    </tbody></table></div>
+    <h3>PCAP and flow APIs</h3><div class="table-wrap"><table><thead><tr><th>Class or method</th><th>Purpose</th><th>Requirement</th></tr></thead><tbody>
+      <tr><td><code>PcapAnalyzer(pcap_path, model_dir="models", idle_timeout=30.0).run(verbose=True)</code></td><td>Reads PCAP/PCAPNG packet-by-packet, groups bidirectional flows, classifies them, and returns a <code>PcapReport</code>.</td><td>Scapy; no live capture privileges needed.</td></tr>
+      <tr><td><code>PcapReport.summary()</code></td><td>Returns packet, flow, benign, attack, and attack-family totals as text.</td><td>Returned by <code>PcapAnalyzer.run</code>.</td></tr>
+      <tr><td><code>FlowTracker(idle_timeout=30.0).add_packet(...)</code></td><td>Builds bidirectional flows from packet endpoint, protocol, length, flags, and timestamp data.</td><td>Low-level flow-generation API.</td></tr>
+      <tr><td><code>FlowTracker.collect_idle_flows()</code>, <code>flush_all()</code>, <code>active_count</code></td><td>Returns completed or idle flows, flushes current flows, or reports active-flow count.</td><td>Use with <code>NetworkFlow.to_feature_vector()</code> and <code>summary()</code>; flow methods include <code>add_packet</code>, <code>is_finished</code>, <code>is_idle</code>, and <code>all_lengths</code>.</td></tr>
+    </tbody></table></div>
+    <div class="code"><header>TRAIN VIA THE PYTHON API <button class="copy">Copy</button></header><pre><code>from netguard.train import train_pipeline
+
+metadata = train_pipeline(
+    data_dir="data/raw/",
+    top_n_features=20,
+    cv_folds=5,
+    cv_jobs=2,
+    collapse_families=True,
+    model_dir="models",
+)
+print(metadata["model_name"], metadata["test_f1_macro"])</code></pre></div>
+    <div class="callout warning"><b>DATA</b><span>The CICIDS2017 dataset is not bundled. Download data you are licensed to use, keep it out of public repositories unless its terms allow publication, and check labels/columns before training. Training overwrites model artifacts in the selected model directory.</span></div>
+  </section>
+
+  <section class="doc" id="train-cli"><label>EXTRA 02 · COMMAND LINE</label><h2>Training and inspection commands</h2>
+    <div class="table-wrap"><table><thead><tr><th>Command</th><th>Purpose and notable options</th></tr></thead><tbody>
+      <tr><td><code>netguard train</code></td><td>Train candidates from CSVs. Options: <code>--data-dir</code>, <code>--top-n-features</code>, <code>--cv-folds</code>, <code>--cv-jobs</code>, <code>--model-dir</code>, <code>--no-collapse</code>.</td></tr>
+      <tr><td><code>netguard evaluate</code></td><td>Run classification metrics, FPR, confusion matrix and ROC. Options: <code>--model-dir</code>, <code>--figures-dir</code>.</td></tr>
+      <tr><td><code>netguard scan capture.pcap</code></td><td>Offline PCAP/PCAPNG analysis. Options: <code>--model-dir</code>, <code>--idle-timeout</code>, <code>--log-file</code>, <code>--quiet</code>. Needs Scapy from <code>[train]</code>.</td></tr>
+      <tr><td><code>netguard monitor</code></td><td>Live packet capture. Options: <code>--interface</code>, <code>--model-dir</code>, <code>--idle-timeout</code>, <code>--log-file</code>, <code>--count</code>. On Windows, capture needs an elevated terminal and suitable capture driver.</td></tr>
+      <tr><td><code>netguard monitor-dashboard</code></td><td>Live capture with a Textual terminal dashboard. Requires capture privileges and Scapy.</td></tr>
+      <tr><td><code>netguard info</code></td><td>Show bundled model name, test macro-F1, classes, and selected features.</td></tr>
+    </tbody></table></div>
+    <div class="code"><header>FIRST TRAINING RUN · POWERSHELL <button class="copy">Copy</button></header><pre><code>python -m pip install "netguard-threat-monitor[train]"
+# Put supported CICIDS-style CSV files under data/raw/
+netguard train --data-dir data/raw --model-dir models
+netguard evaluate --model-dir models</code></pre></div>
+  </section>
+
+  <section class="doc" id="flask"><label>EXTRA 03 · LEGACY FLASK INTEGRATION</label><h2><code>[flask]</code> extension API</h2><p>Install with <code>python -m pip install "netguard-threat-monitor[flask]"</code>. The Flask extension is a separate legacy integration based on <code>AppTrafficMonitor</code>; its behavior and dashboard differ from the canonical FastAPI SDK.</p>
+    <h3><code>NetGuardFlask</code></h3>
+    <div class="code"><header>CONSTRUCTOR AND APP FACTORY PATTERN <button class="copy">Copy</button></header><pre><code>from flask import Flask
+from netguard.integrations.flask import NetGuardFlask
+
+app = Flask(__name__)
+netguard = NetGuardFlask(
+    app=None,
+    dashboard=True,
+    mount_path="/_netguard",
+    alert_webhook=None,
+    alert_log_file="alerts.log",
+    block_attacks=False,
+    block_duration_seconds=300.0,
+)
+netguard.init_app(app)</code></pre></div>
+    <div class="table-wrap"><table><thead><tr><th>Argument / method</th><th>Behavior</th></tr></thead><tbody>
+      <tr><td><code>app=None</code></td><td>Optionally bind immediately. Use <code>init_app(app)</code> later for an application factory.</td></tr>
+      <tr><td><code>dashboard=True</code>, <code>mount_path="/_netguard"</code></td><td>Enables the legacy dashboard and its API endpoints at the configured path.</td></tr>
+      <tr><td><code>alert_webhook=None</code>, <code>alert_log_file=None</code></td><td>Optionally send alerts to a webhook and write JSONL alert records.</td></tr>
+      <tr><td><code>block_attacks=False</code>, <code>block_duration_seconds=300.0</code></td><td>When enabled, this legacy monitor automatically blocks matched clients above its confidence threshold. This differs from the canonical FastAPI SDK’s manual-block default.</td></tr>
+      <tr><td><code>engine=None</code></td><td>Optional custom <code>DetectionEngine</code>; otherwise the bundled model is loaded.</td></tr>
+      <tr><td><code>init_app(app)</code></td><td>Registers Flask before/after request hooks and, if enabled, dashboard endpoints.</td></tr>
+      <tr><td><code>netguard.monitor</code></td><td>Underlying <code>AppTrafficMonitor</code>, including <code>analyze_request</code>, <code>get_stats</code>, <code>block_ip</code>, <code>unblock_ip</code>, <code>is_ip_blocked</code>, and <code>get_blocked_ips</code>.</td></tr>
+    </tbody></table></div>
+    <p><strong>Security note:</strong> the legacy Flask dashboard/API endpoints shown here do not add authentication themselves. Do not expose them publicly as-is. Disable the dashboard with <code>dashboard=False</code>, or protect the mount path at your application/authentication or trusted reverse-proxy layer.</p>
+  </section>
+
+  <section class="doc" id="publish"><label>STATIC HOSTING</label><h2>Deploy this documentation website</h2><p>This site is plain HTML, CSS, and JavaScript. It has no build step, server-side runtime, or external asset dependency. Deploy the contents of the <code>docs/</code> directory as a static site.</p>
+    <h3>Render Static Site</h3><div class="checklist"><p><b>01</b> Push the repository containing this <code>docs/</code> directory to GitHub.</p><p><b>02</b> In Render choose <strong>New → Static Site</strong>, connect the repository and branch.</p><p><b>03</b> Set the publish directory to <code>docs</code>. No build output is generated; use an empty build command if accepted, otherwise <code>echo "Static docs; no build required"</code>.</p><p><b>04</b> Deploy, open the generated site URL, and check that the homepage, styles, scripts, API reference, and prompt page load.</p></div>
+    <h3>GitHub Pages or Netlify</h3><p>For GitHub Pages, choose the branch containing this repository and the <code>/docs</code> folder as the publishing source. For Netlify, connect the repository, set the publish directory to <code>docs</code>, and leave the build command empty. Because navigation uses relative paths, the pages work from a subpath as well as a domain root.</p>
+    <div class="callout"><b>UPDATE</b><span>When package APIs, CLI options, environment variables, or extras change, update this reference and the main guide before publishing a new package release.</span></div>
+  </section>
+  <footer><span><b class="foot-mark">N</b> NetGuard · MIT License</span><a href="index.html">Main guide</a><a href="prompts.html">Agent prompts</a><a href="#top">Back to top ↑</a></footer>
+</div></main><script src="script.js"></script></body>
+</html>
