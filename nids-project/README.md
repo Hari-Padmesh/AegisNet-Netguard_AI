@@ -128,7 +128,7 @@ export NETGUARD_AUTH_PASSWORD=secret
 export NETGUARD_PROJECT_ID=my-app
 ```
 
-Optional Gmail instant alerts:
+Optional email alerts via SMTP (default):
 
 ```bash
 export NETGUARD_ALERT_EMAIL=owner@gmail.com
@@ -138,6 +138,21 @@ export NETGUARD_SMTP_USER=you@gmail.com
 export NETGUARD_SMTP_PASSWORD=<google-app-password>
 export NETGUARD_SMTP_FROM=you@gmail.com
 ```
+
+For hosts that block SMTP egress, the package also supports the Resend HTTPS
+API. Create a Resend API key and configure these variables instead:
+
+```bash
+export NETGUARD_EMAIL_PROVIDER=resend
+export NETGUARD_ALERT_EMAIL=owner@gmail.com
+export NETGUARD_RESEND_API_KEY=your-resend-api-key
+export NETGUARD_RESEND_FROM=onboarding@resend.dev
+```
+
+Resend's test sender is suitable for testing to the email address associated
+with your Resend account. For other recipients, verify a sending domain with
+Resend and set `NETGUARD_RESEND_FROM` to an address on that domain. Delivery
+uses HTTPS, and the notifier supports immediate alerts and weekly digests.
 
 Minimal FastAPI integration:
 
@@ -247,7 +262,7 @@ netguard digest --send
 ```
 
 In FastAPI, the integration starts the weekly scheduler at application startup
-and stops it at shutdown when SMTP is configured and
+and stops it at shutdown when the selected email provider is configured and
 `weekly_digest_enabled=True`. Provide configuration in Python if you do not
 want to set shell environment variables:
 

@@ -6,7 +6,7 @@ bundled ML model, and provides an authenticated live dashboard.
 
 ## Documentation
 
-Browse the [NetGuard documentation site](docs/index.html) for installation,
+Browse the [NetGuard documentation site](docs/index.html), the [API reference by install extra](docs/reference.html), and [copy-ready coding-agent prompts](docs/prompts.html) for installation,
 framework integrations, dashboard setup, configuration, email alerts, CLI
 commands, and deployment guidance. Preview it locally with:
 
@@ -50,13 +50,16 @@ several applications, run `netguard serve` as a separate dashboard service and
 configure each application with `dashboard_mode="separate"` and its
 `dashboard_url`.
 
-Keep dashboard and SMTP credentials in your deployment platform's secret
-manager. Do not commit credentials to source control. Configure NetGuard
+Keep dashboard and email provider credentials in your deployment platform's
+secret manager. Do not commit credentials to source control. Configure NetGuard
 directly with `NetGuardConfig` or use the `NETGUARD_*` settings described in
 the [full project guide](nids-project/README.md).
 
-When SMTP is configured, FastAPI starts and stops the weekly digest scheduler
-with the application lifecycle. Run that scheduler in only one process to
+Email can be delivered through SMTP or the Resend HTTPS API. For hosts that
+block SMTP, select the Resend provider with `NETGUARD_EMAIL_PROVIDER=resend`,
+`NETGUARD_RESEND_API_KEY`, `NETGUARD_RESEND_FROM`, and `NETGUARD_ALERT_EMAIL`.
+FastAPI starts and stops the weekly digest scheduler with the app lifecycle
+when the selected provider is configured. Run one scheduler process per app to
 avoid duplicate digests in multi-worker deployments. Other frameworks should
 manage it from their own lifecycle or use one external scheduler.
 

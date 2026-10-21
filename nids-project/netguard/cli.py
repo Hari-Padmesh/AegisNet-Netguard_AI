@@ -24,12 +24,12 @@ console = Console()
 
 
 @click.group()
-@click.version_option("0.2.0", prog_name="NetGuard AI")
+@click.version_option("0.2.1", prog_name="NetGuard AI")
 def cli():
     """
     \b
     ╔═══════════════════════════════════════╗
-    ║      NetGuard AI — NIDS v0.2.0        ║
+    ║      NetGuard AI — NIDS v0.2.1        ║
     ║  ML-powered Network Intrusion Detector ║
     ╚═══════════════════════════════════════╝
 
@@ -305,7 +305,7 @@ def monitor(interface, model_dir, idle_timeout, log_file, count):
 #  netguard monitor-dashboard  (live capture + interactive dashboard)
 # ──────────────────────────────────────────────────────────────────────────────
 @cli.command("monitor-dashboard")
-@click.option("--model-dir",    default="models", show_default=True)
+@click.option("--model-dir",    default=None, help="Model artifacts directory (defaults to the bundled model).")
 @click.option("--idle-timeout", default=30.0,    show_default=True)
 def monitor_dashboard(model_dir, idle_timeout):
     """
@@ -319,7 +319,7 @@ def monitor_dashboard(model_dir, idle_timeout):
     import socket
     import threading
     from datetime import datetime
-    from netguard.detection import DetectionEngine
+    from netguard.detection import DetectionEngine, get_default_model_dir
     from netguard.flow_generator import FlowTracker
     from netguard.alerts import AlertManager, Alert, Severity
     from netguard.dashboard import NetGuardDashboard
@@ -328,6 +328,9 @@ def monitor_dashboard(model_dir, idle_timeout):
     # Configure to use Layer 3 sockets
     conf.use_pcap = False
 
+    # Resolve bundled package artifacts unless the user explicitly selected a
+    # model directory. The dashboard also reads metadata from this directory.
+    model_dir = model_dir or get_default_model_dir()
     try:
         engine = DetectionEngine(model_dir=model_dir).load()
     except FileNotFoundError as e:
@@ -475,7 +478,7 @@ def digest(send_now):
     except ValueError as exc:
         raise click.ClickException(str(exc))
     if not guard.send_weekly_digest():
-        raise click.ClickException("SMTP is not fully configured for digest delivery.")
+        raise click.ClickException("The selected email provider is not fully configured for digest delivery.")
     console.print("Weekly digest sent.")
 
 
