@@ -30,3 +30,8 @@ sqlite-check.db
 # Generated project documentation and report
 /PROJECT_GUIDE.md
 /NetGuard_Project_Report.docx
+/NetGuard_AI_Expanded_Project_Report*.docx
+
+# Temporary Word lock files and private planning prompt
+~$*.docx
+/plan-netguardMvp.prompt.prompt.md
