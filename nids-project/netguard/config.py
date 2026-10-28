@@ -58,6 +58,12 @@ class NetGuardConfig:
         NETGUARD_RESEND_API_KEY=<api-key>
         NETGUARD_RESEND_FROM=onboarding@resend.dev
         NETGUARD_ALERT_EMAIL=owner@gmail.com
+
+    Centralized dashboard ingestion:
+        NETGUARD_DASHBOARD_MODE=separate
+        NETGUARD_DASHBOARD_URL=https://dashboard-api.example.com
+        NETGUARD_PROJECT_ID=<registered-project-id>
+        NETGUARD_INGEST_KEY=<project-ingestion-key>
     """
 
     project_id: str = "default"
@@ -77,6 +83,8 @@ class NetGuardConfig:
     auth_username: str = ""
     auth_password: str = ""
     auth_api_key: str = ""
+    # Credential used only when forwarding data to the NetGuard cloud dashboard.
+    ingest_key: str = ""
 
     # Alert channels
     alert_email: str = ""
@@ -142,6 +150,7 @@ class NetGuardConfig:
             auth_username=os.getenv("NETGUARD_AUTH_USERNAME", ""),
             auth_password=os.getenv("NETGUARD_AUTH_PASSWORD", ""),
             auth_api_key=os.getenv("NETGUARD_AUTH_API_KEY", ""),
+            ingest_key=os.getenv("NETGUARD_INGEST_KEY", ""),
             alert_email=os.getenv("NETGUARD_ALERT_EMAIL", ""),
             email_provider=os.getenv("NETGUARD_EMAIL_PROVIDER", "smtp").strip().lower(),
             resend_api_key=os.getenv("NETGUARD_RESEND_API_KEY", ""),

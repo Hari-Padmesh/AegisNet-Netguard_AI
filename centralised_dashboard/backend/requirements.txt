@@ -1,0 +1,6 @@
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+pymongo>=4.13,<5
+pwdlib[argon2]>=0.2,<1
+email-validator>=2.2,<3
+python-dotenv>=1,<2
