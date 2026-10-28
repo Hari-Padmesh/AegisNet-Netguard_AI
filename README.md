@@ -12,6 +12,10 @@ commands, and deployment guidance. Preview it locally with:
 
     python -m http.server 8001 --directory docs
 
+## NetGuard Cloud Dashboard
+
+Open the [NetGuard Cloud dashboard](https://netguard-dashboard-nlo8.onrender.com) to create an account, register instrumented FastAPI applications, and review their latest telemetry and security events in one workspace. Each app must run the NetGuard SDK and be configured with its project ID, ingestion key, and the cloud API URL; a public website URL by itself is not monitored. See the [cloud dashboard setup guide](centralised_dashboard/README.md) for deployment and integration details. The cloud dashboard currently supports FastAPI onboarding.
+
 ## Install
 
 From a source checkout, run this command from the repository root:
