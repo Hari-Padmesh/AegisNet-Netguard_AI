@@ -35,3 +35,7 @@ sqlite-check.db
 # Temporary Word lock files and private planning prompt
 ~$*.docx
 /plan-netguardMvp.prompt.prompt.md
+
+# Temporary report inspection and generation scripts
+/.report_*.py
+/.update_project_report.py
