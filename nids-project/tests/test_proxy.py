@@ -48,7 +48,8 @@ def test_proxy_forwards_requests_through_netguard():
     app = create_proxy_app("http://upstream.test", guard)
 
     with patch("httpx.AsyncClient", FakeClient):
-        response = TestClient(app).get("/items?q=1")
+        with TestClient(app) as client:
+            response = client.get("/items?q=1")
 
     assert response.status_code == 200
     assert response.text == "upstream response"
@@ -66,7 +67,27 @@ def test_proxy_returns_bad_gateway_when_upstream_is_unavailable():
     app = create_proxy_app("http://upstream.test", guard)
 
     with patch("httpx.AsyncClient", FailingClient):
-        response = TestClient(app).get("/")
+        with TestClient(app) as client:
+            response = client.get("/")
 
     assert response.status_code == 502
     assert "could not reach upstream" in response.text
+
+
+def test_proxy_dashboard_routes_are_not_forwarded_to_upstream():
+    guard = NetGuard(
+        project_id="proxy-dashboard-test",
+        auth_username="admin",
+        auth_password="secret",
+        log_file=None,
+        console_alerts=False,
+    )
+    app = create_proxy_app("http://upstream.test", guard)
+
+    # The dashboard requires authentication. A 401 proves the request reached
+    # the mounted dashboard rather than the proxy's upstream route.
+    with patch("httpx.AsyncClient", FakeClient):
+        with TestClient(app) as client:
+            response = client.get("/netguard/api/stats")
+
+    assert response.status_code == 401

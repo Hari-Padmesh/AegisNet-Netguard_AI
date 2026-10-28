@@ -33,19 +33,14 @@ class DashboardEventNotifier(AlertNotifier):
         self._telemetry_closed = False
 
     def notify(self, alert: "Alert") -> None:
-        headers = {"Content-Type": "application/json"}
-        if self._config.auth_api_key:
-            headers["Authorization"] = f"Bearer {self._config.auth_api_key}"
-        elif self._config.auth_username and self._config.auth_password:
-            token = base64.b64encode(
-                f"{self._config.auth_username}:{self._config.auth_password}".encode()
-            ).decode()
-            headers["Authorization"] = f"Basic {token}"
-
         payload = alert.to_dict()
         payload["project_id"] = self._config.project_id
         try:
-            requests.post(self._url, json=payload, headers=headers, timeout=3.0)
+            response = requests.post(
+                self._url, json=payload, headers=self._headers(), timeout=3.0
+            )
+            if response.status_code >= 400:
+                logger.warning("Dashboard event delivery failed with status %s", response.status_code)
         except requests.RequestException as exc:
             logger.warning("Dashboard event delivery failed: %s", exc)
 
@@ -107,7 +102,9 @@ class DashboardEventNotifier(AlertNotifier):
 
     def _headers(self) -> dict[str, str]:
         headers = {"Content-Type": "application/json"}
-        if self._config.auth_api_key:
+        if self._config.ingest_key:
+            headers["Authorization"] = f"Bearer {self._config.ingest_key}"
+        elif self._config.auth_api_key:
             headers["Authorization"] = f"Bearer {self._config.auth_api_key}"
         elif self._config.auth_username and self._config.auth_password:
             token = base64.b64encode(

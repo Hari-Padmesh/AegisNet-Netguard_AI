@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from typing import Iterable
 
 from starlette.applications import Starlette
@@ -33,13 +34,13 @@ def create_proxy_app(target: str, guard: NetGuard) -> Starlette:
         if request.url.query:
             target_url = f"{target_url}?{request.url.query}"
         try:
-            async with httpx.AsyncClient(follow_redirects=False) as client:
-                upstream = await client.request(
-                    request.method,
-                    target_url,
-                    headers=_forward_headers(request.headers.items()),
-                    content=await request.body(),
-                )
+            client = request.app.state.netguard_proxy_client
+            upstream = await client.request(
+                request.method,
+                target_url,
+                headers=_forward_headers(request.headers.items()),
+                content=await request.body(),
+            )
         except httpx.RequestError as exc:
             return Response(
                 content=f"NetGuard proxy could not reach upstream: {exc}",
@@ -53,7 +54,23 @@ def create_proxy_app(target: str, guard: NetGuard) -> Starlette:
             headers=response_headers,
         )
 
-    routes = [Route("/{path:path}", proxy, methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])]
-    app = Starlette(routes=routes)
+    @asynccontextmanager
+    async def lifespan(app):
+        # Reuse the connection pool instead of creating a new client for every
+        # request. This avoids repeated TCP/TLS setup during bursts.
+        async with httpx.AsyncClient(follow_redirects=False) as client:
+            app.state.netguard_proxy_client = client
+            yield
+
+    app = Starlette(routes=[], lifespan=lifespan)
+    # Register NetGuard's dashboard routes before the catch-all proxy route.
+    # Otherwise /netguard/* is matched by /{path:path} and sent upstream.
     setup_netguard(app, guard)
+    app.router.routes.append(
+        Route(
+            "/{path:path}",
+            proxy,
+            methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+        )
+    )
     return app
