@@ -4,6 +4,11 @@ NetGuard is an embeddable HTTP threat monitoring SDK for Python applications.
 It records request metadata, applies application-layer detection rules and a
 bundled ML model, and provides an authenticated live dashboard.
 
+Published package in PyPi: [netguard-threat-monitor](https://pypi.org/project/netguard-threat-monitor)
+Cloud dashboard(can only connect applications that already have basic netguard package installed and configured): [NetGuard Cloud dashboard](https://netguard-dashboard-nlo8.onrender.com) - follow the steps in the webite to connect and mmonitor
+
+Package documentation: [Netgurad docs](https://aegisnet-netguard-ai.onrender.com)
+
 ## Documentation
 
 Browse the [NetGuard documentation site](docs/index.html), the [API reference by install extra](docs/reference.html), and [copy-ready coding-agent prompts](docs/prompts.html) for installation,
